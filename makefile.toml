@@ -1,16 +1,6 @@
 [tasks.watch]
 script = [
-    "systemfd --no-pid -s http::3000 -- cargo watch -x run"
-]
-
-[tasks.db-start]
-script = [
-    "docker-compose up -d"
-]
-
-[tasks.db-stop]
-script = [
-    "docker-compose down"
+    "systemfd --no-pid -s http::8080 -- cargo watch -x run"
 ]
 
 [tasks.db-make]
@@ -36,9 +26,4 @@ script = [
 [tasks.db-reset]
 script = [
     "diesel database reset"
-]
-
-[tasks.db-shell]
-script = [
-    "source .env; psql $DATABASE_URL"
 ]
