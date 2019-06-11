@@ -1,20 +1,34 @@
-#![allow(unused_imports, dead_code, non_snake_case)]
+#![allow(unused_imports, dead_code, non_snake_case, unused_variables)]
+#[macro_use]
 extern crate actix;
+extern crate actix_web;
 extern crate dotenv;
 extern crate futures;
+extern crate diesel;
+extern crate mysql;
+extern crate r2d2;
 extern crate r2d2_mysql;
-#[macro_use]
 extern crate serde_derive;
 extern crate env_logger;
 extern crate listenfd;
 extern crate num_cpus;
 extern crate serde_json;
+extern crate jsonwebtoken as jwt;
+extern crate csrf_token;
+extern crate log;
+#[macro_use]
+extern crate dotenv_codegen;
+
 
 // Exports Addr.
 //use actix::prelude::*;
 use actix_web::{
-    http::header, middleware, middleware::cors::Cors, web, App, error, Error, HttpResponse, HttpServer,
+    http::header, middleware, 
+    middleware::identity::{CookieIdentityPolicy, IdentityService, Identity},
+    middleware::cors::Cors, web, App, error, Error, HttpResponse, HttpServer,
 };
+use csrf_token::CsrfTokenGenerator;
+use chrono::Duration;
 use actix_files::Files;
 use actix_multipart::{Field, Multipart, MultipartError};
 use dotenv::dotenv;
@@ -27,423 +41,387 @@ use rand::{
     {thread_rng, Rng},
 };
 use listenfd::ListenFd;
-use r2d2_mysql::{mysql::from_row, mysql::params};
-use serde_json::json;
-
+use r2d2_mysql::{mysql::from_row, mysql::params, mysql::from_value};
+use serde_json::{value::RawValue, value::Value, json, to_string, Map};
+use log::{info, trace, warn, debug};
 use std::io::Write;
 use std::{env, fs::File, iter, path::PathBuf};
-
-
+use std::str::FromStr;
 mod db;
 mod model;
+mod auth;
+mod token;
+mod errors;
 
-fn sc_tb(db: web::Data<db::Pool>) -> impl Future<Item = HttpResponse, Error = Error> {
+use crate::token::{create_token, verify_token, decode_token};
+
+fn sc_tb(req: web::Json<model::Request>, db: web::Data<db::Pool>) 
+-> impl Future<Item = HttpResponse, Error = Error> {
     web::block(move || {
         let mut conn = db.get().unwrap();
-        conn.prep_exec("SELECT TB_ID, DESCR FROM SC_TB", ())
-            .map(|result| {
-                result
-                    .map(|x| x.unwrap())
-                    .map(|row| {
-                        let (tb_id, descr) = from_row(row);
-                        model::ScTB { tb_id, descr }
-                    })
-                    .collect::<Vec<model::ScTB>>()
-            })
+        match db::TrxLogs(&mut conn, &req.into_inner()) {
+            Ok(_) => {
+                match db::get_tb(&mut conn) {
+                    Ok(ok) => Ok(ok),
+                    Err(e) => Err(e),
+                }
+            },
+            Err(e) => Err(e),
+        }
     })
     .then(|res| match res {
         Ok(tb) => Ok(HttpResponse::Ok().json(json!({
-            "code": 200,
+            "message": "success get master tb".to_string(),
             "status": true,
             "data": tb,
         }))),
-        Err(_) => Ok(HttpResponse::InternalServerError().into()),
+        Err(e) => Ok(HttpResponse::InternalServerError().json(json!({
+            "message":"failed get master tb".to_string(),
+            "status":false,
+            "data": e.to_string()}))),
     })
 }
 
 fn sc_tdb(
     id: web::Path<i32>,
+    req: web::Json<model::Request>,
     db: web::Data<db::Pool>,
 ) -> impl Future<Item = HttpResponse, Error = Error> {
     web::block(move || {
         let mut conn = db.get().unwrap();
-        conn.prep_exec(
-            "SELECT TDB_ID, DESCR FROM SC_TDB where TB_ID = :id",
-            params! {"id" => id.into_inner()},
-        )
-        .map(|result| {
-            result
-                .map(|x| x.unwrap())
-                .map(|row| {
-                    let (tdb_id, descr) = from_row(row);
-                    model::ScTDB { tdb_id, descr }
-                })
-                .collect::<Vec<model::ScTDB>>()
-        })
+        match db::TrxLogs(&mut conn, &req.into_inner()) {
+            Ok(_) => {
+                match db::get_tdb(&mut conn, id.into_inner()) {
+                    Ok(ok) => Ok(ok),
+                    Err(e) => Err(e),
+                }
+            },
+            Err(e) => Err(e),
+        }
     })
     .then(|res| match res {
         Ok(tdb) => Ok(HttpResponse::Ok().json(json!({
-            "code": 200,
+            "message": "success get master tdb".to_string(),
             "status": true,
             "data": tdb,
         }))),
-        Err(_) => Ok(HttpResponse::InternalServerError().into()),
+        Err(e) => Ok(HttpResponse::InternalServerError().json(json!({
+            "message":"failed get master tdb".to_string(),
+            "status":false,
+            "data": e.to_string()}))),
     })
 }
 
 fn sc_td(
     id: web::Path<i32>,
+    req: web::Json<model::Request>,
     db: web::Data<db::Pool>,
 ) -> impl Future<Item = HttpResponse, Error = Error> {
     web::block(move || {
         let mut conn = db.get().unwrap();
-        conn.prep_exec(
-            "SELECT TD_ID, DESCR FROM SC_TD where TB_ID = :id",
-            params! {"id" => id.into_inner()},
-        )
-        .map(|result| {
-            result
-                .map(|x| x.unwrap())
-                .map(|row| {
-                    let (td_id, descr) = from_row(row);
-                    model::ScTD { td_id, descr }
-                })
-                .collect::<Vec<model::ScTD>>()
-        })
+        match db::TrxLogs(&mut conn, &req.into_inner()) {
+            Ok(_) => {
+                match db::get_td(&mut conn, id.into_inner()) {
+                    Ok(ok) => Ok(ok),
+                    Err(e) => Err(e),
+                }
+            },
+            Err(e) => Err(e),
+        }
     })
     .then(|res| match res {
         Ok(td) => Ok(HttpResponse::Ok().json(json!({
-            "code": 200,
+            "message": "success get master td".to_string(),
             "status": true,
             "data": td,
         }))),
-        Err(_) => Ok(HttpResponse::InternalServerError().into()),
+        Err(e) => Ok(HttpResponse::InternalServerError().json(json!({
+            "message":"failed get master td".to_string(),
+            "status":false,
+            "data": e.to_string()}))),
     })
 }
 
 fn sc_elc(
     //(tb_id, tdb_id): (web::Path<i32>, web::Path<i32>),
     info: web::Path<(i32, i32)>,
+    req: web::Json<model::Request>,
     db: web::Data<db::Pool>,
 ) -> impl Future<Item = HttpResponse, Error = Error> {
     web::block(move || {
-        let mut conn = db.get().unwrap();
         let id = info.into_inner();
-        conn.prep_exec(
-            "SELECT EC_ID, DESCR FROM SC_ELC where TB_ID = :tb_id and TDB_ID = :tdb_id",
-            params! {"tb_id" => id.0, "tdb_id" => id.1},
-        )
-        .map(|result| {
-            result
-                .map(|x| x.unwrap())
-                .map(|row| {
-                    let (ec_id, descr) = from_row(row);
-                    model::ScELC { ec_id, descr }
-                })
-                .collect::<Vec<model::ScELC>>()
-        })
+        let mut conn = db.get().unwrap();
+        match db::TrxLogs(&mut conn, &req.into_inner()) {
+            Ok(_) => {
+                match db::get_elc(&mut conn, id.0, id.1) {
+                    Ok(ok) => Ok(ok),
+                    Err(e) => Err(e),
+                }
+            },
+            Err(e) => Err(e),
+        }
     })
     .then(|res| match res {
         Ok(elc) => Ok(HttpResponse::Ok().json(json!({
-            "code": 200,
+            "message": "success get master elc".to_string(),
             "status": true,
             "data": elc,
         }))),
-        Err(_) => Ok(HttpResponse::InternalServerError().into()),
+        Err(e) => Ok(HttpResponse::InternalServerError().json(json!({
+            "message":"failed get master elc".to_string(),
+            "status":false,
+            "data": e.to_string()}))),
     })
 }
 
 fn sc_list(
     id: web::Path<i32>,
+    req: web::Json<model::Request>,
     db: web::Data<db::Pool>,
 ) -> impl Future<Item = HttpResponse, Error = Error> {
     web::block(move || {
         let mut conn = db.get().unwrap();
-        conn.prep_exec(
-            "SELECT WO_ID, CUSTOMER_ID, PROSPECT_NBR, ASSIGN_TO, SERVICES_ID, SERVICES_DESCR, SERVICES_CATEGORY, DESCR, SCHEDULE_DATE, REGION, LATITUDE, LONGITUDE, CREATED_DATE FROM SC_WORKORDER WHERE ASSIGN_TO = :id ORDER BY CREATED_DATE DESC",
-            params! {"id" => id.into_inner()},
-        )
-        .map(|result| {
-            result
-                .map(|x| x.unwrap())
-                .map(|mut row| {
-                    /*let (
-                        wo_id,
-                        customer_id,
-                        prospect_nbr,
-                        employee_id,
-                        service_id,
-                        service_descr,
-                        category,
-                        descr,
-                        schedule_date,
-                        region,
-                        latitude,
-                        longitude,
-                        created_date,
-                    ) = from_row(row);*/
-                    model::ScWorkorder {
-                        wo_id: row.take("WO_ID").unwrap(),
-                        customer_id: row.take("CUSTOMER_ID").unwrap(),
-                        prospect_nbr: row.take("PROSPECT_NBR").unwrap(),
-                        employee_id: row.take("ASSIGN_TO").unwrap(),
-                        service_id: row.take("SERVICES_ID").unwrap(),
-                        service_descr: row.take("SERVICES_DESCR").unwrap(),
-                        category: row.take("SERVICES_CATEGORY").unwrap(),
-                        descr: row.take("DESCR").unwrap(),
-                        schedule_date: row.take("SCHEDULE_DATE").unwrap(),
-                        region: row.take("REGION").unwrap(),
-                        latitude: row.take("LATITUDE").unwrap(),
-                        longitude: row.take("LONGITUDE").unwrap(),
-                        created_date: row.take("CREATED_DATE").unwrap(),
-                    }
-                })
-                .collect::<Vec<model::ScWorkorder>>()
-        })
+        match db::TrxLogs(&mut conn, &req.into_inner()) {
+            Ok(_) => {
+                match db::get_list(&mut conn, id.into_inner()) {
+                    Ok(ok) => Ok(ok),
+                    Err(e) => Err(e),
+                }
+            },
+            Err(e) => Err(e),
+        }
     })
     .then(|res| match res {
         Ok(sc) => Ok(HttpResponse::Ok().json(json!({
-            "code": 200,
+            "message": "success get list sc".to_string(),
             "status": true,
             "data": sc,
         }))),
-        Err(_) => Ok(HttpResponse::InternalServerError().into()),
+        Err(e) => Ok(HttpResponse::InternalServerError().json(json!({
+            "message":"failed get list sc".to_string(),
+            "status":false,
+            "data": e.to_string()}))),
     })
 }
 
 fn sc_profile(
     id: web::Path<i32>,
+    req: web::Json<model::Request>,
     db: web::Data<db::Pool>,
 ) -> impl Future<Item = HttpResponse, Error = Error> {
     web::block(move || {
         let mut conn = db.get().unwrap();
-        conn.prep_exec(
-            "SELECT CUSTOMER_ID, CUSTOMER_NAME, ADDRESS, MOBILE_PHONE, HOME_PHONE, EXTRA_PHONE, WHATSAPP, GENDER, EMAIL, FOTO FROM SC_CUSTOMER WHERE CUSTOMER_ID = :id",
-            params! {"id" => id.into_inner()},
-        )
-        .map(|result| {
-            result
-                .map(|x| x.unwrap())
-                .map(|mut row| {
-                    model::ScCustomer {
-                        customer_id : row.take("CUSTOMER_ID").unwrap(),
-                        customer_name: row.take("CUSTOMER_NAME").unwrap(),
-                        address: row.take("ADDRESS").unwrap(),
-                        mobile_phone: row.take("MOBILE_PHONE").unwrap(),
-                        home_phone: row.take("HOME_PHONE").unwrap(),
-                        extra_phone: row.take("EXTRA_PHONE").unwrap(),
-                        whatsapp: row.take("WHATSAPP").unwrap(),
-                        gender: row.take("GENDER").unwrap(),
-                        email: row.take("EMAIL").unwrap(),
-                        foto: row.take("FOTO").unwrap(),
-                    }
-                })
-                .collect::<Vec<model::ScCustomer>>()
-        })
+        match db::TrxLogs(&mut conn, &req.into_inner()) {
+            Ok(_) => {
+                match db::get_profile(&mut conn, id.into_inner()) {
+                    Ok(ok) => Ok(ok),
+                    Err(e) => Err(e),
+                }
+            },
+            Err(e) => Err(e),
+        }
     })
     .then(|res| match res {
         Ok(prof) => Ok(HttpResponse::Ok().json(json!({
-            "code": 200,
+            "message": "success get detail profile".to_string(),
             "status": true,
             "data": prof,
         }))),
-        Err(_) => Ok(HttpResponse::InternalServerError().into()),
+        Err(e) => Ok(HttpResponse::InternalServerError().json(json!({
+            "message": "failed get detail profile".to_string(),
+            "status":false,
+            "data": e.to_string()}))),
     })
 }
 
 pub fn sc_result(
-    id: web::Path<i32>,
-    req: web::Json<model::ScResult>,
+    id:  web::Path<i32>,
+    req: web::Json<model::Request>, 
     db: web::Data<db::Pool>,
 ) -> impl Future<Item = HttpResponse, Error = Error> {
     web::block(move || {
         let mut conn = db.get().unwrap();
         println!("request: {:?}", req);
-        let simulation = id.into_inner();
-        println!("simulation: {}", simulation);
-        let _ = conn
-                .start_transaction(false, None, None)
-                .and_then(|mut t| {
-                    t.prep_exec("INSERT INTO SC_RESULT_NEW
-                                       (CUSTOMER_ID, TB_ID, TDB_ID, TD_ID, EC_ID, EMPLOYEE_ID, LATITUDE, LONGITUDE)
-                                   VALUES
-                                       (:customer_id, :tb_id, :tdb_id, :td_id, :ec_id, :employee_id, :latitude, :longitude)",
-                                    params!{
-                                        "customer_id" => req.customer_id.clone(),
-                                        "tb_id" => req.tb_id.clone(),
-                                        "tdb_id" => req.tdb_id.clone(),
-                                        "td_id" => req.td_id.clone(),
-                                        "ec_id" => req.ec_id.clone(),
-                                        "employee_id" => req.employee_id.clone(),
-                                        "latitude" => &req.latitude.clone(),
-                                        "longitude" => &req.longitude.clone(),
-                                    })
-                        .unwrap();
-                    t.commit().is_ok();
-                    Ok(())
-                })
-        .unwrap();
-       
-        match simulation {
-            o =>  if o == 1 {
-                conn.prep_exec("
-                SELECT A.SC_ID, A.CUSTOMER_ID, C.SCORE, C.SEC, E.PRODUCT_ID, E.PRODUCT_NAME, E.PROMO_ID, E.PROMO_CODE, E.PROMO_DESCR FROM SC_RESULT_NEW A
-                JOIN SC_RESULT_SCORE B ON A.SC_ID = B.SC_ID
-                JOIN SC_SCORE C ON B.SEC_ID = C.SEC_ID
-                JOIN SC_CALLBACK D ON B.SCORE_ID = D.SCORE_ID
-                JOIN SC_MAPPING_PRODUCT E ON D.MAP_ID = E.MAP_ID WHERE A.CUSTOMER_ID = :id",  params!{"id" => req.customer_id.clone()})
-                .map(|result| {
-                    result
-                        .map(|x| x.unwrap())
-                        .map(|mut row| {
-                            model::ScCallback {
-                                sc_id: row.take("SC_ID").unwrap(),
-                                customer_id: row.take("CUSTOMER_ID").unwrap(),
-                                score: row.take("SCORE").unwrap(),
-                                sec: row.take("SEC").unwrap(),
-                                product_id: row.take("PRODUCT_ID").unwrap(),
-                                product_name: row.take("PRODUCT_NAME").unwrap(),
-                                promo_id: row.take("PROMO_ID").unwrap(),
-                                promo_code: row.take("PROMO_CODE").unwrap(),
-                                promo_descr: row.take("PROMO_DESCR").unwrap(),
-                            }
-                        })
-                        .collect::<Vec<model::ScCallback>>()
-                })
+        let simulation: Option<i32> = Some(id.into_inner());
+        println!("simulation: {:?}", simulation);
+        let data = req.data.get();
+        let result = serde_json::from_str::<model::ScResult>(&data).unwrap();
+        println!("data: {:?} request: {:?}", data, result);
+        
+        if let Some(o) = Some(simulation) {
+            if let Some(Some(1)) = Some(o) {
+                match db::TrxLogs(&mut conn, &req.into_inner()) {
+                    Ok(_) => {
+                        match db::TrxResult(&mut conn, &result) {
+                            Ok(_) => {
+                                match db::getCallback(&mut conn, &result.customer_id) {
+                                    Ok(cb) => Ok(cb),
+                                    Err(e) => Err(e),
+                                }
+                            },
+                            Err(e) => Err(e),
+                        }
+                    },
+                    Err(e) => Err(e),
+                }
             }else{
-                conn.prep_exec("
-                SELECT A.SC_ID, A.CUSTOMER_ID, C.SCORE, C.SEC, E.PRODUCT_ID, E.PRODUCT_NAME, E.PROMO_ID, E.PROMO_CODE, E.PROMO_DESCR FROM SC_RESULT_NEW A
-                JOIN SC_RESULT_SCORE B ON A.SC_ID = B.SC_ID
-                JOIN SC_SCORE C ON B.SEC_ID = C.SEC_ID
-                JOIN SC_CALLBACK D ON B.SCORE_ID = D.SCORE_ID
-                JOIN SC_MAPPING_PRODUCT E ON D.MAP_ID = E.MAP_ID WHERE A.CUSTOMER_ID = :id",  params!{"id" => req.customer_id.clone()})
-                .map(|result| {
-                    result
-                        .map(|x| x.unwrap())
-                        .map(|mut row| {
-                            model::ScCallback {
-                                sc_id: row.take("SC_ID").unwrap(),
-                                customer_id: row.take("CUSTOMER_ID").unwrap(),
-                                score: row.take("SCORE").unwrap(),
-                                sec: row.take("SEC").unwrap(),
-                                product_id: row.take("PRODUCT_ID").unwrap(),
-                                product_name: row.take("PRODUCT_NAME").unwrap(),
-                                promo_id: row.take("PROMO_ID").unwrap(),
-                                promo_code: row.take("PROMO_CODE").unwrap(),
-                                promo_descr: row.take("PROMO_DESCR").unwrap(),
-                            }
-                        })
-                        .collect::<Vec<model::ScCallback>>()
-                })
-            },
+                println!("tb_id: {:?} tdb_id: {:?} td_id: {:?} ec_id: {:?}", result.tb_id, result.tdb_id, result.td_id, result.ec_id);
+                match db::getSimulation(&mut conn, &result.customer_id, 
+                        &result.tb_id, &result.tdb_id, 
+                        &result.td_id, &result.ec_id) {
+                    Ok(sm) => Ok(sm),
+                    Err(e) => Err(e),
+                }
+            }
+        }else{
+            println!("tb_id: {:?} tdb_id: {:?} td_id: {:?} ec_id: {:?}", result.tb_id, result.tdb_id, result.td_id, result.ec_id);
+            match db::getSimulation(&mut conn, &result.customer_id, 
+                    &result.tb_id, &result.tdb_id, 
+                    &result.td_id, &result.ec_id) {
+                Ok(sm) => Ok(sm),
+                Err(e) => Err(e),
+            }
         }
     })
     .then(|res| match res {
         Ok(call) => Ok(HttpResponse::Ok().json(json!({
-            "code": 200,
+            "message":"send data result success".to_string(),
             "status": true,
-            "data": call}))),
-        Err(_) => Ok(HttpResponse::InternalServerError().into()),
+            "data": call,
+        }))),
+        Err(e) => Ok(HttpResponse::InternalServerError().json(json!({
+            "message":"send data result failed".to_string(),
+            "status":false,
+            "data": e.to_string()}))),
     })
 }
 
 pub fn sc_edited(
     id: web::Path<i32>,
-    req: web::Json<model::ScCustomer>,
+    req: web::Json<model::Request>,
     db: web::Data<db::Pool>,
 ) -> impl Future<Item = HttpResponse, Error = Error> {
     web::block(move || {
         let mut conn = db.get().unwrap();
         println!("request: {:?}", req);
-        let is_edited = id.into_inner();
-        println!("simulation: {}", is_edited);
-        match is_edited {
-            x => if x == 1 { 
-                    let _ = conn
-                        .start_transaction(false, None, None)
-                        .and_then(|mut t| {
-                            t.prep_exec("INSERT INTO SC_RESULT_DETAIL
-                                                (CUSTOMER_ID, CUSTOMER_NAME, ADDRESS, MOBILE_PHONE, HOME_PHONE, EXTRA_PHONE, WHATSAPP, GENDER, EMAIL)
-                                            VALUES
-                                                (:customer_id, :customer_name, :address, :mobile_phone, :home_phone, :extra_phone, :whatsapp, :gender, :email)",
-                                            params!{
-                                                "customer_id" => &req.customer_id.clone(),
-                                                "customer_name" => &req.customer_name.clone(),
-                                                "address" => &req.address.clone(),
-                                                "mobile_phone" => &req.mobile_phone.clone(),
-                                                "home_phone" => &req.home_phone.clone(),
-                                                "extra_phone" => &req.extra_phone.clone(),
-                                                "whatsapp" => &req.whatsapp.clone(),
-                                                "gender" => &req.gender.clone(),
-                                                "email" => &req.email.clone(),
-                                            })
-                                .unwrap();
-                            t.commit().is_ok();
-                            Ok(())
-                        })
-                    .unwrap();
-                }else{
-
-                    let _ = conn
-                        .start_transaction(false, None, None)
-                        .and_then(|mut t| {
-                            t.prep_exec("UPDATE SC_RESULT_DETAIL SET
-                                                 CUSTOMER_NAME = :customer_name,
-                                                ADDRESS = :address,
-                                                MOBILE_PHONE = :mobile_phone,
-                                                HOME_PHONE = :home_phone,
-                                                EXTRA_PHONE = :extra_phone,
-                                                WHATSAPP = :whatsapp,
-                                                GENDER = :gender,  
-                                                EMAIL = :email
-                                                WHERE CUSTOMER_ID =:customer_id",
-                                            params!{
-                                                "customer_name" => &req.customer_name.clone(),
-                                                "address" => &req.address.clone(),
-                                                "mobile_phone" => &req.mobile_phone.clone(),
-                                                "home_phone" => &req.home_phone.clone(),
-                                                "extra_phone" => &req.extra_phone.clone(),
-                                                "whatsapp" => &req.whatsapp.clone(),
-                                                "gender" => &req.gender.clone(),
-                                                "email" => &req.email.clone(),
-                                                "customer_id" => &req.customer_id.clone(),
-                                            })
-                                .unwrap();
-                            t.commit().is_ok();
-                            Ok(())
-                        })
-                    .unwrap();
+        let is_edited: Option<i32> = Some(id.into_inner());
+        println!("edited: {:?}", is_edited);
+        let data = req.data.get();
+        let result = serde_json::from_str::<model::ScDetail>(&data).unwrap();
+        println!("data: {:?} request: {:?}", data, result);
+        match db::TrxLogs(&mut conn, &req.into_inner()) {
+            Ok(_) => {
+                match db::TrxDetail(&mut conn, &result,is_edited) {
+                    Ok(_) => Ok(()),
+                    Err(e) => Err(e),
                 }
-        }
-        conn.prep_exec(
-            "SELECT CUSTOMER_ID, CUSTOMER_NAME, ADDRESS, MOBILE_PHONE, HOME_PHONE, EXTRA_PHONE, WHATSAPP, GENDER, EMAIL FROM SC_RESULT_DETAIL WHERE CUSTOMER_ID = :id",
-            params! {"id" => &req.customer_id.clone()},
-        )
-        .map(|result| {
-            result
-                .map(|x| x.unwrap())
-                .map(|mut row| {
-                    model::ScDetail {
-                        customer_id : row.take("CUSTOMER_ID").unwrap(),
-                        customer_name: row.take("CUSTOMER_NAME").unwrap(),
-                        address: row.take("ADDRESS").unwrap(),
-                        mobile_phone: row.take("MOBILE_PHONE").unwrap(),
-                        home_phone: row.take("HOME_PHONE").unwrap(),
-                        extra_phone: row.take("EXTRA_PHONE").unwrap(),
-                        whatsapp: row.take("WHATSAPP").unwrap(),
-                        gender: row.take("GENDER").unwrap(),
-                        email: row.take("EMAIL").unwrap(),
-                    }
-                })
-                .collect::<Vec<model::ScDetail>>()
-        })
+            },
+            Err(e) => Err(e),
+        }  
     })
     .then(|res| match res {
-        Ok(edit) => Ok(HttpResponse::Ok().json(json!({
-            "code": 200,
+        Ok(_) => Ok(HttpResponse::Ok().json(json!({
+            "message": "send data customer success".to_string(),
             "status": true,
-            "data": edit}))),
-        Err(_) => Ok(HttpResponse::InternalServerError().into()),
+            "data": "save data detail success".to_string(),
+        }))),
+        Err(e) => Ok(HttpResponse::InternalServerError().json(json!({
+            "message": "send data customer failed".to_string(),
+            "status":false,
+            "data": e.to_string()}))),
+    })
+}
+
+pub fn sc_login(
+    req: web::Json<model::Request>, 
+    //id: Identity, 
+    db: web::Data<db::Pool>
+    //generator: web::Data<CsrfTokenGenerator>
+) -> impl Future<Item = HttpResponse, Error = Error> {
+    web::block(move || {
+        let mut conn = db.get().unwrap();
+        let data = req.data.get();
+        let u = serde_json::from_str::<model::User>(&data).unwrap();
+        info!("data: {} id: {}", data, u.username);
+
+        match db::get_login(&mut conn, &u.username, &u.password) {
+            Ok(Some(user)) => {
+                let token = create_token(user.clone());
+                //id.remember(token);
+                let id: i32 = FromStr::from_str(&user.employee_id.to_string()).unwrap();
+                info!("token: {}", token);
+                match db::TrxToken(&mut conn, &id, &token) {
+                    Ok(_) => {
+                        match db::TrxLogs(&mut conn, &req.into_inner()) {
+                            Ok(_) => {
+                                match decode_token(token.to_string()) {
+                                    Ok(token_data) => {
+                                        match verify_token(&token_data, &db) {
+                                            Ok(ok) => {
+                                                Ok(model::User{employee_id: user.employee_id, 
+                                                               username: user.username, 
+                                                               password: user.password, 
+                                                               token: Some(token)})
+                                            },
+                                            Err(e) => Err(e.to_string()),
+                                        }
+                                    },
+                                    Err(e) => Err(e.to_string()),
+                                }
+                            },
+                            Err(e) => Err(e.to_string()),
+                        }
+                    },
+                    Err(e) => Err(e.to_string()),
+                }
+            },
+            Ok(None) => Ok(model::User::new()),
+            Err(e) => Err(e.to_string()),
+        }
+    })
+    .then(|res| match res {
+        Ok(log) =>  Ok(HttpResponse::Ok()
+                //.header("X-CSRF-TOKEN", hex::encode(generator.generate()))
+                .json(json!({
+                "message": "login success".to_string(),
+                "status": true,
+                "data":log,
+            }))),
+        Err(e) => Ok(HttpResponse::InternalServerError().json(json!({
+            "message":"login failed".to_string(),
+            "status":false,
+            "data": e.to_string()}))),
+    })
+}
+
+pub fn sc_logout(
+    req: web::Json<model::Request>, 
+    db: web::Data<db::Pool>
+) -> impl Future<Item = HttpResponse, Error = Error> {
+    web::block(move || {
+        let mut conn = db.get().unwrap();
+        let id: i32 = FromStr::from_str(&req.process.employee_id.to_string()).unwrap();
+        println!("id : {:?}", id);
+        match db::TrxLogout(&mut conn, &id) {
+            Ok(_) => {
+                match db::TrxLogs(&mut conn, &req.into_inner()) {
+                    Ok(_) => Ok(()),
+                     Err(e) => Err(e),
+                }
+            },
+            Err(e) => Err(e),
+        }
+    })
+    .then(|res| match res {
+        Ok(_) =>  Ok(HttpResponse::Ok().json(json!({
+            "message":"logout success".to_string(),
+            "status": true,
+            "data": "logout success".to_string(),
+            }))),
+        Err(e) => Ok(HttpResponse::InternalServerError().json(json!({
+            "message":"logout failed".to_string(),
+            "status":false,
+            "data": e.to_string()}))),
     })
 }
 
@@ -526,31 +504,51 @@ pub fn sc_upload(multipart: Multipart) -> impl Future<Item = HttpResponse, Error
 
 fn main() -> std::io::Result<()> {
     // Grab the env vars.
-    dotenv().ok();
-    env::set_var("RUST_LOG", "actix_server=info,actix_web=info");
+    //dotenv().ok();
+    env::set_var("RUST_LOG", "actix_server=info,actix_web=debug");
     env::set_var("RUST_BACKTRACE", "1");
     env_logger::init();
     //let sys = actix::System::new("scorecard");
     //let cpus = num_cpus::get();
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    //let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let database_url = dotenv!("DATABASE_URL");
 
     let pool = db::init_pool(&database_url);
+
+    //let csrf_token_header = header::HeaderName::from_lowercase(b"x-csrf-token").unwrap();
 
     // let addr: Addr<DbExecutor> = SyncArbiter::start(4, move|| db::DbExecutor(pool.clone()));
     HttpServer::new(move || {
         // App::with_state(AppState{db: addr.clone()})
         App::new()
             .data(pool.clone())
+            /*.data(
+                CsrfTokenGenerator::new(
+                    dotenv!("CSRF_TOKEN_KEY").as_bytes().to_vec(),
+                    Duration::hours(1)
+                )
+            )
+            .wrap(
+                IdentityService::new(
+                    CookieIdentityPolicy::new(dotenv!("SECRET_KEY").as_bytes())
+                        .domain(dotenv!("MYSTOREDOMAIN"))
+                        .name("scorecard")
+                        .path("/")
+                        .max_age(Duration::days(1).num_seconds())
+                        .secure(dotenv!("COOKIE_SECURE").parse().unwrap())
+                )
+            )
             .wrap(
                 Cors::new()
                     .allowed_origin("*")
                     .allowed_methods(vec!["GET", "POST"])
-                    .allowed_headers(vec![header::ORIGIN, header::AUTHORIZATION, header::ACCEPT])
-                    .allowed_header(header::CONTENT_TYPE)
+                    .allowed_headers(vec![header::ORIGIN, header::CONTENT_TYPE, header::AUTHORIZATION, header::ACCEPT,  csrf_token_header.clone()])
+                    .expose_headers(vec![csrf_token_header.clone()])
                     .max_age(3600),
-            )
+            )*/
             .wrap(middleware::DefaultHeaders::new().header("SC-Version", "1.0.0"))
             //.wrap(middleware::Compress::default())
+            .wrap(auth::CheckAuth)
             .wrap(middleware::Logger::default())
             .service(
                 web::scope("/api/v1.0.0")
@@ -577,6 +575,14 @@ fn main() -> std::io::Result<()> {
                     .service(
                         web::resource("/sc-upload")
                             .route(web::post().to_async(sc_upload)),
+                    )
+                    .service(
+                        web::resource("/sc-login")
+                            .route(web::post().to_async(sc_login)),
+                    )
+                    .service(
+                        web::resource("/sc-logout")
+                            .route(web::post().to_async(sc_logout)),
                     )
 
             )
