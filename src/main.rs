@@ -4,6 +4,7 @@ extern crate actix;
 extern crate actix_web;
 extern crate dotenv;
 extern crate futures;
+extern crate failure;
 extern crate diesel;
 extern crate mysql;
 extern crate r2d2;
@@ -16,6 +17,7 @@ extern crate serde_json;
 extern crate jsonwebtoken as jwt;
 extern crate csrf_token;
 extern crate log;
+extern crate lazy_static;
 #[macro_use]
 extern crate dotenv_codegen;
 
@@ -27,10 +29,10 @@ use actix_web::{
     middleware::identity::{CookieIdentityPolicy, IdentityService, Identity},
     middleware::cors::Cors, web, App, error, Error, HttpResponse, HttpServer,
 };
+use actix_multipart::{Field, Multipart, MultipartError};
 use csrf_token::CsrfTokenGenerator;
 use chrono::Duration;
 use actix_files::Files;
-use actix_multipart::{Field, Multipart, MultipartError};
 use dotenv::dotenv;
 use futures::{
     future::{err, Either},
@@ -52,8 +54,11 @@ mod model;
 mod auth;
 mod token;
 mod errors;
+mod client;
+mod failures;
 
 use crate::token::{create_token, verify_token, decode_token};
+use crate::client::ScClient;
 
 fn sc_tb(req: web::Json<model::Request>, db: web::Data<db::Pool>) 
 -> impl Future<Item = HttpResponse, Error = Error> {
@@ -312,7 +317,12 @@ pub fn sc_edited(
         match db::TrxLogs(&mut conn, &req.into_inner()) {
             Ok(_) => {
                 match db::TrxDetail(&mut conn, &result,is_edited) {
-                    Ok(_) => Ok(()),
+                    Ok(_) => {
+                        match db::getDetail(&mut conn, &result.customer_id) {
+                            Ok(ok) => Ok(ok),
+                            Err(e) => Err(e),
+                        }
+                    },
                     Err(e) => Err(e),
                 }
             },
@@ -320,15 +330,54 @@ pub fn sc_edited(
         }  
     })
     .then(|res| match res {
-        Ok(_) => Ok(HttpResponse::Ok().json(json!({
+        Ok(edit) => Ok(HttpResponse::Ok().json(json!({
             "message": "send data customer success".to_string(),
             "status": true,
-            "data": "save data detail success".to_string(),
+            "data": edit,
         }))),
         Err(e) => Ok(HttpResponse::InternalServerError().json(json!({
             "message": "send data customer failed".to_string(),
             "status":false,
             "data": e.to_string()}))),
+    })
+}
+
+pub fn sc_calculate(
+    req: web::Json<model::Request>, 
+    db: web::Data<db::Pool>
+) -> impl Future<Item = HttpResponse, Error = Error> {
+    web::block(move || {
+        let mut conn = db.get().unwrap();
+        let data = req.data.get();
+        let result = serde_json::from_str::<model::ScCalc>(&data).unwrap();
+        info!("data: {} id: {}", data, result.cal_id);
+        let id: i64 = FromStr::from_str(&result.cal_id.to_string()).unwrap();
+        println!("id : {:?}", id);
+        //match db::TrxLogs(&mut conn, &req.into_inner()) {
+        //   Ok(_) => {
+                match ScClient::Calculate(&mut ScClient::default(), &mut conn, &id) {
+                    Ok(ok) => Ok(ok),
+                    Err(e) => Err(e),
+                }
+                //Example call client
+                //match ScClient::send_result(&mut ScClient::default()) {
+                //    Ok(ok) => Ok(ok),
+                //    Err(e) => Err(e),
+                //}
+        //    },
+        //    Err(e) => Err(e),
+        //}
+    })
+    .then(|res| match res {
+        Ok(calc) =>  Ok(HttpResponse::Ok().json(json!({
+                "message":"calculate success".to_string(),
+                "status": true,
+                "data": calc,
+            }))),
+        Err(e) => Ok(HttpResponse::InternalServerError().json(json!({
+                "message":"calculate failed".to_string(),
+                "status":false,
+                "data": e.to_string()}))),
     })
 }
 
@@ -342,10 +391,11 @@ pub fn sc_login(
         let mut conn = db.get().unwrap();
         let data = req.data.get();
         let u = serde_json::from_str::<model::User>(&data).unwrap();
-        info!("data: {} id: {}", data, u.username);
+        println!("data: {} id: {}", data, u.username);
 
         match db::get_login(&mut conn, &u.username, &u.password) {
             Ok(Some(user)) => {
+                println!("user : {:#?}", user);
                 let token = create_token(user.clone());
                 //id.remember(token);
                 let id: i32 = FromStr::from_str(&user.employee_id.to_string()).unwrap();
@@ -358,10 +408,21 @@ pub fn sc_login(
                                     Ok(token_data) => {
                                         match verify_token(&token_data, &db) {
                                             Ok(ok) => {
-                                                Ok(model::User{employee_id: user.employee_id, 
-                                                               username: user.username, 
-                                                               password: user.password, 
-                                                               token: Some(token)})
+                                                Ok(vec![model::User{employee_id: user.employee_id, 
+                                                                username: user.username, 
+                                                                password: user.password, 
+                                                                nik: user.nik,
+                                                                sfl_code: user.sfl_code,
+                                                                employee_name: user.employee_name,
+                                                                email: user.email,
+                                                                user_type: user.user_type,
+                                                                role_name: user.role_name,
+                                                                brand_code: user.brand_code, 
+                                                                branch_name: user.branch_name, 
+                                                                region_name: user.region_name,
+                                                                application_id: user.application_id,
+                                                                avatar: user.avatar,
+                                                                token: Some(token) }])
                                             },
                                             Err(e) => Err(e.to_string()),
                                         }
@@ -375,7 +436,7 @@ pub fn sc_login(
                     Err(e) => Err(e.to_string()),
                 }
             },
-            Ok(None) => Ok(model::User::new()),
+            Ok(None) => Ok(serde_json::from_value(json!(vec![{}])).unwrap()),
             Err(e) => Err(e.to_string()),
         }
     })
@@ -400,7 +461,7 @@ pub fn sc_logout(
 ) -> impl Future<Item = HttpResponse, Error = Error> {
     web::block(move || {
         let mut conn = db.get().unwrap();
-        let id: i32 = FromStr::from_str(&req.process.employee_id.to_string()).unwrap();
+        let id: i32 = FromStr::from_str(&req.user.employee_id.to_string()).unwrap();
         println!("id : {:?}", id);
         match db::TrxLogout(&mut conn, &id) {
             Ok(_) => {
@@ -505,7 +566,7 @@ pub fn sc_upload(multipart: Multipart) -> impl Future<Item = HttpResponse, Error
 fn main() -> std::io::Result<()> {
     // Grab the env vars.
     //dotenv().ok();
-    env::set_var("RUST_LOG", "actix_server=info,actix_web=debug");
+    env::set_var("RUST_LOG", "actix_server=info,actix_web=info");
     env::set_var("RUST_BACKTRACE", "1");
     env_logger::init();
     //let sys = actix::System::new("scorecard");
@@ -571,6 +632,10 @@ fn main() -> std::io::Result<()> {
                     .service(
                         web::resource("/sc-result/{id}")
                             .route(web::post().to_async(sc_result)),
+                    )
+                    .service(
+                        web::resource("/sc-calculate")
+                            .route(web::post().to_async(sc_calculate)),
                     )
                     .service(
                         web::resource("/sc-upload")

@@ -1,15 +1,15 @@
 
 use crate::model::{
-    Request, ScCallback, ScCustomer, ScDetail, ScELC, ScResult, ScTB, ScTD, ScTDB, ScWorkorder,
-    Token, User,
+    Request, ScAddon, ScBasic, ScCallback, ScCustomer, ScDetail, ScELC, ScPackages, ScResult, ScTB,
+    ScTD, ScTDB, ScWorkorder, Token, User,
 };
 use chrono::Local;
 use log::{debug, info, trace, warn};
 use mysql::{from_row, from_row_opt, from_value, params, Error};
 use r2d2_mysql::mysql::{Opts, OptsBuilder};
 use r2d2_mysql::pool::MysqlConnectionManager;
-use serde_json::from_str;
-
+use serde_json::{from_str, json, Value};
+use std::collections::HashMap;
 
 pub type Conn = r2d2::PooledConnection<MysqlConnectionManager>;
 pub type Pool = r2d2::Pool<MysqlConnectionManager>;
@@ -40,10 +40,10 @@ pub fn TrxLogs(conn: &mut Conn, req: &Request) -> Result<(), Error> {
                                         :devices, :imei, :ip_address, :db_ver, :db_name, :latlng, :timelng,
                                         :data, :process)",
                                 params!{
-                                        "employee_id" => &req.process.employee_id.clone(),
-                                        "nik" => &req.process.nik.clone(),
-                                        "user_login" => &req.process.user_login.clone(),
-                                        "employee_name" => &req.process.employee_name.clone(),
+                                        "employee_id" => &req.user.employee_id.clone(),
+                                        "nik" => &req.user.nik.clone(),
+                                        "user_login" => &req.user.user_login.clone(),
+                                        "employee_name" => &req.user.employee_name.clone(),
                                         "application_id" => &req.application.application_id.clone(),
                                         "application_name" => &req.application.application_name.clone(),
                                         "version_code" => &req.application.version_code.clone(),
@@ -54,10 +54,10 @@ pub fn TrxLogs(conn: &mut Conn, req: &Request) -> Result<(), Error> {
                                         "ip_address" => &req.application.ip_address.clone(),
                                         "db_ver" => &req.application.database_version.clone(),
                                         "db_name" => &req.application.database_name.clone(),
-                                        "latlng" => &req.process.latlng.clone(),
-                                        "timelng" => &req.process.time_latlng.clone(),
+                                        "latlng" => &req.user.latlng.clone(),
+                                        "timelng" => &req.user.date_latlng.clone(),
                                         "data" =>  &req.data.get(),
-                                        "process" => &req.process.process_name.clone(),
+                                        "process" => &req.action_package.clone(),
                                 })
                         .unwrap();
                         t.commit().is_ok();
@@ -68,21 +68,34 @@ pub fn TrxLogs(conn: &mut Conn, req: &Request) -> Result<(), Error> {
 }
 
 pub fn get_login(conn: &mut Conn, username: &str, password: &str) -> Result<Option<User>, Error> {
-    let oke = conn.prep_exec(format!("select IMEI, NAME ,PASSWORD, null as TOKEN from users where NAME=:username and PASSWORD=:pass limit 1"),
-            params!("username" => username, "pass" => password))
+    let oke = conn.prep_exec("select employee_id, user_name, password, nik, sfl_code,
+            full_name, email,  user_type, role_name, brand, branch, region_name,
+            application_id, avatar, null as token 
+            from V_SC_USER_LOGIN where user_name=:username and password=:pass limit 1",
+            params! {"username" => username, "pass" => password},)
                 .map(|r| r.map(|x| x.unwrap())
-                    .map(|row| {
-                        let (employee_id, username, password, token) = from_row(row);
+                    .map(|mut row| {
                         User{
-                            employee_id,
-                            username,
-                            password,
-                            token,
+                            employee_id: row.take("employee_id").unwrap(),
+                            username: row.take("user_name").unwrap(),
+                            password: row.take("password").unwrap(),
+                            nik: row.take("nik").unwrap(),
+                            sfl_code: row.take("sfl_code").unwrap(),
+                            employee_name: row.take("full_name").unwrap(),
+                            email: row.take("email").unwrap(),
+                            user_type: row.take("user_type").unwrap(),
+                            role_name: row.take("role_name").unwrap(),
+                            brand_code: row.take("brand").unwrap(),
+                            branch_name: row.take("branch").unwrap(), 
+                            region_name: row.take("region_name").unwrap(),
+                            application_id: row.take("application_id").unwrap(),
+                            avatar: row.take("avatar").unwrap(),
+                            token: row.take("token").unwrap(),
                         }
                     }).into_iter().next())?;
     match oke {
         Some(u) => Ok(Some(u)),
-        None => return Ok(None),
+        _ => return Ok(None),
     }
 }
 
@@ -94,7 +107,7 @@ pub fn TrxToken(conn: &mut Conn, employee_id: &i32, token: &str) -> Result<(), E
                 "INSERT INTO SC_TOKEN
                                 (EMPLOYEE_ID, TOKEN, LAST_LOGIN)
                                 VALUES
-                                (:employee_id, :token, now())",
+                                (:employee_id, :token, NOW())",
                 params! {
                         "employee_id" => employee_id,
                         "token" => token,
@@ -113,7 +126,7 @@ pub fn TrxLogout(conn: &mut Conn, employee_id: &i32) -> Result<(), Error> {
         .start_transaction(false, None, None)
         .and_then(|mut t| {
             t.prep_exec(
-                "UPDATE SC_TOKEN SET LAST_LOGOUT = now() WHERE EMPLOYEE_ID = :employee_id and LAST_LOGOUT IS NULL",
+                "UPDATE SC_TOKEN SET LAST_LOGOUT = NOW() WHERE EMPLOYEE_ID = :employee_id and LAST_LOGOUT IS NULL",
                 params! {
                         "employee_id" => employee_id,
                 },
@@ -129,7 +142,7 @@ pub fn TrxLogout(conn: &mut Conn, employee_id: &i32) -> Result<(), Error> {
 pub fn get_token(conn: &mut Conn, req: &Token) -> Result<bool, Error> {
     let token = conn
         .prep_exec(
-            "select TOKEN from SC_TOKEN where EMPLOYEE_ID=:employee_id AND LAST_LOGIN = CURRENT_DATE() LIMIT 1",
+            "select TOKEN from SC_TOKEN where EMPLOYEE_ID=:employee_id LIMIT 1",
             params! {"employee_id" =>&req.uid},
         )
         .map(|result| {
@@ -295,9 +308,9 @@ pub fn TrxResult(conn: &mut Conn, req: &ScResult) -> Result<(), Error> {
         .start_transaction(false, None, None)
         .and_then(|mut t| {
             t.prep_exec("INSERT INTO SC_RESULT_NEW
-                                (CUSTOMER_ID, TB_ID, TDB_ID, TD_ID, EC_ID, EMPLOYEE_ID, LATITUDE, LONGITUDE)
+                                (CUSTOMER_ID, TB_ID, TDB_ID, TD_ID, EC_ID, EMPLOYEE_ID, LATITUDE, LONGITUDE, CREATED_DATE)
                             VALUES
-                                (:customer_id, :tb_id, :tdb_id, :td_id, :ec_id, :employee_id, :latitude, :longitude)",
+                                (:customer_id, :tb_id, :tdb_id, :td_id, :ec_id, :employee_id, :latitude, :longitude, NOW())",
                             params!{
                                 "customer_id" => req.customer_id.clone(),
                                 "tb_id" => req.tb_id.clone(),
@@ -404,9 +417,9 @@ pub fn TrxDetail(conn: &mut Conn, req: &ScDetail, opts: Option<i32>) -> Result<(
                 .start_transaction(false, None, None)
                 .and_then(|mut t| {
                     t.prep_exec("INSERT INTO SC_RESULT_DETAIL
-                                        (CUSTOMER_ID, CUSTOMER_NAME, ADDRESS, MOBILE_PHONE, HOME_PHONE, EXTRA_PHONE, WHATSAPP, GENDER, EMAIL)
+                                        (CUSTOMER_ID, CUSTOMER_NAME, ADDRESS, MOBILE_PHONE, HOME_PHONE, EXTRA_PHONE, WHATSAPP, GENDER, EMAIL, CREATED_DATE)
                                     VALUES
-                                        (:customer_id, :customer_name, :address, :mobile_phone, :home_phone, :extra_phone, :whatsapp, :gender, :email)",
+                                        (:customer_id, :customer_name, :address, :mobile_phone, :home_phone, :extra_phone, :whatsapp, :gender, :email, NOW())",
                                     params!{
                                         "customer_id" => &req.customer_id.clone(),
                                         "customer_name" => &req.customer_name.clone(),
@@ -436,7 +449,8 @@ pub fn TrxDetail(conn: &mut Conn, req: &ScDetail, opts: Option<i32>) -> Result<(
                                         EXTRA_PHONE = :extra_phone,
                                         WHATSAPP = :whatsapp,
                                         GENDER = :gender,  
-                                        EMAIL = :email
+                                        EMAIL = :email,
+                                        CREATED_DATE = NOW()
                                         WHERE CUSTOMER_ID =:customer_id",
                         params! {
                             "customer_name" => &req.customer_name.clone(),
@@ -460,10 +474,10 @@ pub fn TrxDetail(conn: &mut Conn, req: &ScDetail, opts: Option<i32>) -> Result<(
     Ok(())
 }
 
-pub fn getDetail(conn: &mut Conn, employee_id: &i32) -> Result<Vec<ScDetail>, Error> {
+pub fn getDetail(conn: &mut Conn, customer_id: &i64) -> Result<Vec<ScDetail>, Error> {
     let detail = conn.prep_exec(
         "SELECT CUSTOMER_ID, CUSTOMER_NAME, ADDRESS, MOBILE_PHONE, HOME_PHONE, EXTRA_PHONE, WHATSAPP, GENDER, EMAIL FROM SC_RESULT_DETAIL WHERE CUSTOMER_ID = :id",
-        params! {"id" => employee_id},
+        params! {"id" => customer_id},
     )
     .map(|result| {
         result
@@ -487,4 +501,94 @@ pub fn getDetail(conn: &mut Conn, employee_id: &i32) -> Result<Vec<ScDetail>, Er
         Ok(ok) => Ok(ok),
         Err(e) => Err(e),
     }
+}
+
+pub fn getCalculate(conn: &mut Conn, customer_id: &i64) -> Result<Option<ScPackages>, Error> {
+    let packages = conn
+        .prep_exec(
+            "SELECT BRAND, PROMO_ID, PROSPECT_TYPE, HW_STATUS, CUSTOMER_CLASS, HOUSE_STATUS, 
+        FIRST_PAYMENT, INET_ROUTER, INET_ADDON, PRODUCT FROM SC_V_CALCULATE WHERE CUSTOMER_ID = :id",
+            params! {"id" => customer_id},
+        )
+        .map(|r| {
+            r.map(|x| x.unwrap())
+                .map(|mut row| {  
+                    ScPackages {
+                        brand_id: row.take("BRAND").unwrap(),
+                        promotion_id: row.take("PROMO_ID").unwrap(),
+                        prospect_type: row.take("PROSPECT_TYPE").unwrap(),
+                        hardware_status: row.take("HW_STATUS").unwrap(),
+                        customer_class: row.take("CUSTOMER_CLASS").unwrap(),
+                        house_status: row.take("HOUSE_STATUS").unwrap(),
+                        first_payment: row.take("FIRST_PAYMENT").unwrap(),
+                        internet_package_router: row.take("INET_ROUTER").unwrap(),
+                        internet_package_addon: row.take("INET_ADDON").unwrap(),
+                        package: row.take("PRODUCT").unwrap(),
+                    }
+            
+                })
+                .into_iter()
+                .next()
+        })?;
+    match packages {
+        Some(calculate) => Ok(Some(calculate)),
+        _ => return Ok(None),
+    }
+}
+
+pub fn push_ppg(conn: &mut Conn, customer_id: &i64, customer_name: &String, amount: &i64) -> Result<(), Error> {
+    let paid = conn
+        .prep_exec(
+            "select customer_id from valsys_prod.CUST_INQUIRY where CUST_NEW=:customer_id AND PAID =0",
+            params! {"customer_id" =>&customer_id},
+        )
+        .map(|result| {
+            result
+                .map(|x| x.unwrap())
+                .map(|_| true)
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| false)
+        });
+    match Some(paid) {
+        Some(ok) => {
+            let _ = conn
+            .start_transaction(false, None, None)
+            .and_then(|mut t| {
+                t.prep_exec(
+                    "UPDATE valsys_prod.CUST_INQUIRY  SET AMMOUNT = :amount, NMPEL = :customer_name WHERE CUST_NEW=:customer_id",
+                    params! {
+                            "amount" => &amount,
+                            "customer_name" => &customer_name,
+                            "customer_id" => &customer_id,
+                    },
+                )
+                .unwrap();
+                t.commit().is_ok();
+                Ok(())
+            })
+            .unwrap();
+            Ok(())
+        },
+        None => {
+            let _ = conn
+            .start_transaction(false, None, None)
+            .and_then(|mut t| {
+                t.prep_exec(
+                    "INSERT INTO valsys_prod.CUST_INQUIRY(CUST_OLD, CUST_NEW, NMPEL, AMMOUNT, PAID, SFROM, STO)
+                      VALUES (0, :customer_id, :name, :amount, 0, '00010101000000', '00010101000000')",
+                    params! {
+                        "customer_id" => &customer_id,
+                        "name" => &customer_name,
+                        "amount" => &amount,
+                    },
+                )
+                .unwrap();
+                t.commit().is_ok();
+                Ok(())
+            })
+            .unwrap();
+            Ok(())
+        },
+    } 
 }
