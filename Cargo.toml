@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["anggacipiet<anggacipiet89@gmail.com>"]
 edition = "2018"
 
+#[profile.release]
+#lto = true
+
 [dependencies]
 actix= "0.8.2"
 actix-rt = "0.2.2"

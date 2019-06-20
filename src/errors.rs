@@ -1,6 +1,7 @@
 use actix_web::error::{BlockingError, JsonPayloadError};
 use actix_web::{http, HttpResponse, ResponseError};
 use diesel;
+use mysql;
 use failure::Fail;
 use jwt;
 use log::error;
@@ -98,6 +99,13 @@ impl From<BlockingError<AppError>> for AppError {
 impl From<r2d2::Error> for AppError {
     fn from(error: r2d2::Error) -> Self {
         error!("ERROR r2d2 = {:?}", error);
+        AppError::Internal
+    }
+}
+
+impl From<mysql::Error> for AppError {
+    fn from(error: mysql::Error) -> Self {
+        error!("ERROR mysql = {:?}", error);
         AppError::Internal
     }
 }
