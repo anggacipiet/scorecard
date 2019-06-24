@@ -47,7 +47,7 @@ use r2d2_mysql::{mysql::from_row, mysql::params, mysql::from_value};
 use serde_json::{value::RawValue, value::Value, json, to_string, Map};
 use log::{info, trace, warn, debug};
 use std::io::Write;
-use std::{env, fs::File, iter, path::PathBuf};
+use std::{env, fs::File, fs::create_dir_all, iter, path::PathBuf};
 use std::str::FromStr;
 mod db;
 mod model;
@@ -217,9 +217,16 @@ fn sc_profile(
     web::block(move || {
         let mut conn = db.get().unwrap();
         match db::TrxLogs(&mut conn, &req.into_inner()) {
-            Ok(_) => {
+            Ok(o) => {
                 match db::get_profile(&mut conn, id.into_inner()) {
-                    Ok(ok) => Ok(ok),
+                    Ok(ok) => {
+                        match db::getDetail(&mut conn, &ok[0].customer_id) {
+                            Ok(oke) => {
+                                Ok(ok)
+                            },
+                            Err(e) => Err(e),
+                        }
+                    },
                     Err(e) => Err(e),
                 }
             },
@@ -253,35 +260,25 @@ pub fn sc_result(
         let result = serde_json::from_str::<model::ScResult>(&data).unwrap();
         println!("data: {:?} request: {:?}", data, result);
         
-        if let Some(o) = Some(simulation) {
-            if let Some(Some(1)) = Some(o) {
-                match db::TrxLogs(&mut conn, &req.into_inner()) {
-                    Ok(_) => {
-                        match db::TrxResult(&mut conn, &result) {
-                            Ok(_) => {
-                                match db::getCallback(&mut conn, &result.customer_id) {
-                                    Ok(cb) => Ok(cb),
-                                    Err(e) => Err(e),
-                                }
-                            },
-                            Err(e) => Err(e),
-                        }
-                    },
-                    Err(e) => Err(e),
-                }
-            }else{
-                println!("tb_id: {:?} tdb_id: {:?} td_id: {:?} ec_id: {:?}", result.tb_id, result.tdb_id, result.td_id, result.ec_id);
-                match db::getSimulation(&mut conn, &result.customer_id, 
-                        &result.tb_id, &result.tdb_id, 
-                        &result.td_id, &result.ec_id) {
-                    Ok(sm) => Ok(sm),
-                    Err(e) => Err(e),
-                }
-            }
+        if let Some(Some(1)) = Some(simulation) {
+            match db::TrxLogs(&mut conn, &req.into_inner()) {
+                Ok(_) => {
+                    match db::TrxResult(&mut conn, &result) {
+                        Ok(_) => {
+                            match db::getCallback(&mut conn, &result.customer_id) {
+                                Ok(cb) => Ok(cb),
+                                Err(e) => Err(e),
+                            }
+                        },
+                        Err(e) => Err(e),
+                    }
+                },
+                Err(e) => Err(e),
+            }       
         }else{
             println!("tb_id: {:?} tdb_id: {:?} td_id: {:?} ec_id: {:?}", result.tb_id, result.tdb_id, result.td_id, result.ec_id);
             match db::getSimulation(&mut conn, &result.customer_id, 
-                    &result.tb_id, &result.tdb_id, 
+                    &result.tb_id, &result.tdb_id,
                     &result.td_id, &result.ec_id) {
                 Ok(sm) => Ok(sm),
                 Err(e) => Err(e),
@@ -349,21 +346,17 @@ pub fn sc_calculate(
     web::block(move || {
         let mut conn = db.get().unwrap();
         let data = req.data.get();
-        let result = serde_json::from_str::<model::ScCalc>(&data).unwrap();
-        info!("data: {} id: {}", data, result.cal_id);
-        let id: i64 = FromStr::from_str(&result.cal_id.to_string()).unwrap();
-        println!("id : {:?}", id);
+        let result = serde_json::from_str::<model::ScCallback>(&data).unwrap();
+        info!("data: {} id: {}", data, result.sc_id);
+        let id: i32 = FromStr::from_str(&result.sc_id.to_string()).unwrap();
+        let customer_id: i64 = FromStr::from_str(&result.customer_id.to_string()).unwrap();
+        println!("id : {:?}, {:?}", id, customer_id);
         //match db::TrxLogs(&mut conn, &req.into_inner()) {
         //   Ok(_) => {
-                match ScClient::Calculate(&mut ScClient::default(), &mut conn, &id) {
+                match ScClient::Calculate(&mut ScClient::default(), &mut conn, &customer_id, &id) {
                     Ok(ok) => Ok(ok),
                     Err(e) => Err(e),
                 }
-                //Example call client
-                //match ScClient::send_result(&mut ScClient::default()) {
-                //    Ok(ok) => Ok(ok),
-                //    Err(e) => Err(e),
-                //}
         //    },
         //    Err(e) => Err(e),
         //}
@@ -404,31 +397,21 @@ pub fn sc_login(
                     Ok(_) => {
                         match db::TrxLogs(&mut conn, &req.into_inner()) {
                             Ok(_) => {
-                                match decode_token(token.to_string()) {
-                                    Ok(token_data) => {
-                                        match verify_token(&token_data, &db) {
-                                            Ok(ok) => {
-                                                Ok(vec![model::User{employee_id: user.employee_id, 
-                                                                username: user.username, 
-                                                                password: user.password, 
-                                                                nik: user.nik,
-                                                                sfl_code: user.sfl_code,
-                                                                employee_name: user.employee_name,
-                                                                email: user.email,
-                                                                user_type: user.user_type,
-                                                                role_name: user.role_name,
-                                                                brand_code: user.brand_code, 
-                                                                branch_name: user.branch_name, 
-                                                                region_name: user.region_name,
-                                                                application_id: user.application_id,
-                                                                avatar: user.avatar,
-                                                                token: Some(token) }])
-                                            },
-                                            Err(e) => Err(e.to_string()),
-                                        }
-                                    },
-                                    Err(e) => Err(e.to_string()),
-                                }
+                                Ok(vec![model::User{employee_id: user.employee_id, 
+                                                username: user.username, 
+                                                password: user.password, 
+                                                nik: user.nik,
+                                                sfl_code: user.sfl_code,
+                                                employee_name: user.employee_name,
+                                                email: user.email,
+                                                user_type: user.user_type,
+                                                role_name: user.role_name,
+                                                brand_code: user.brand_code, 
+                                                branch_name: user.branch_name, 
+                                                region_name: user.region_name,
+                                                application_id: user.application_id,
+                                                avatar: user.avatar,
+                                                token: Some(token) }])                   
                             },
                             Err(e) => Err(e.to_string()),
                         }
@@ -467,7 +450,7 @@ pub fn sc_logout(
             Ok(_) => {
                 match db::TrxLogs(&mut conn, &req.into_inner()) {
                     Ok(_) => Ok(()),
-                     Err(e) => Err(e),
+                    Err(e) => Err(e),
                 }
             },
             Err(e) => Err(e),
@@ -518,6 +501,40 @@ pub fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
         Ok(file) => file,
         Err(e) => return Either::A(err(error::ErrorInternalServerError(e))),
     };
+
+    /*let file_name = match field.content_disposition().unwrap().get_filename() {
+        Some(filename) => filename.replace(' ', "_").to_string(),
+        None => return Either::A(err(error::ErrorInternalServerError("Couldn't read the filename.")))
+    };
+    println!("content-dispostition : {:?}", file_name);
+
+    let mut path = PathBuf::new();
+    path.push(
+        env::var("STORAGE").unwrap_or(
+            env::current_dir()
+                .expect("Failed to get current directory!")
+                .to_str()
+                .unwrap()
+                .into(),
+        ),
+    );
+    path.push(file_name.clone());
+    
+    let upload_dir = path.push(path.as_os_str().to_str().unwrap().to_owned());
+    println!("dir path : {:?}", upload_dir);
+
+    match create_dir_all(upload_dir) {
+        Ok(_) => {},
+        Err(e) => return Either::A(err(error::ErrorInternalServerError(e))),
+    }
+    let upload_file_path = format!("SC/{}", upload_dir);
+    let upload_file_path2 = upload_file_path.clone();
+
+    let file = match File::create(upload_file_path2) {
+        Ok(file) => file,
+        Err(e) => return Either::A(err(error::ErrorInternalServerError(e))),
+    };
+    */
     Either::B(
         field
             .fold((file, 0i64), move |(mut file, mut acc), bytes| {
@@ -544,6 +561,7 @@ pub fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
 
 /// Handle multi-part stream forms
 pub fn sc_upload(multipart: Multipart) -> impl Future<Item = HttpResponse, Error = Error> {
+    
     multipart
         .map_err(error::ErrorInternalServerError)
         .map(|field| save_file(field).into_stream())
@@ -614,16 +632,16 @@ fn main() -> std::io::Result<()> {
             .service(
                 web::scope("/api/v1.0.0")
                     .service(web::resource("").to(|| "New-ScoreCard Version 1.0.0."))
-                    .service(web::resource("/sc-tb").route(web::get().to_async(sc_tb)))
-                    .service(web::resource("/sc-tdb/{id}").route(web::get().to_async(sc_tdb)))
-                    .service(web::resource("/sc-td/{id}").route(web::get().to_async(sc_td)))
-                    .service(web::resource("/sc-list/{id}").route(web::get().to_async(sc_list)))
+                    .service(web::resource("/sc-tb").route(web::post().to_async(sc_tb)))
+                    .service(web::resource("/sc-tdb/{id}").route(web::post().to_async(sc_tdb)))
+                    .service(web::resource("/sc-td/{id}").route(web::post().to_async(sc_td)))
+                    .service(web::resource("/sc-list/{id}").route(web::post().to_async(sc_list)))
                     .service(
-                        web::resource("/sc-profile/{id}").route(web::get().to_async(sc_profile)),
+                        web::resource("/sc-profile/{id}").route(web::post().to_async(sc_profile)),
                     )
                     .service(
                         web::resource("/sc-elc/{tb_id}/{tdb_id}")
-                            .route(web::get().to_async(sc_elc)),
+                            .route(web::post().to_async(sc_elc)),
                     )
                     .service(
                         web::resource("/sc-edited/{id}")

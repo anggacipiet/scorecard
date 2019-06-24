@@ -10,7 +10,7 @@ use reqwest::{
 use serde::de::Deserialize;
 use serde_json::{json, map::Map, Value};
 
-use crate::db::{getCalculate, get_profile, push_ppg, Conn};
+use crate::db::{getCalculate, get_profile, push_ppg, Conn, TrxCalculate};
 use crate::failures::CustomError;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -102,7 +102,7 @@ impl ScClient {
 
     }
 
-    pub fn Calculate(&mut self, conn: &mut Conn, id: &i64) -> Result<Vec<ScCalculate>, Error> {
+    pub fn Calculate(&mut self, conn: &mut Conn, id: &i64, cb_id: &i32) -> Result<Vec<ScCalculate>, Error> {
 
         /*
         let req = r#"
@@ -175,14 +175,19 @@ impl ScClient {
                         match get_profile(conn, *id as i32) {
                             Ok(oke) => {
                                 println!("get name: {:?}", oke[0].customer_name);
-                                match push_ppg(
-                                    conn,
-                                    &id,
-                                    &oke[0].customer_name.to_uppercase(),
-                                    &resp.TOTAL_ESTIMATED_COSTS,
-                                ) {
-                                    Ok(_) => Ok(vec![resp]),
-                                    Err(_) => Err(Error::from(CustomError::new(""))),
+                                match TrxCalculate(conn, &resp, &cb_id) {
+                                    Ok(_) => {
+                                        match push_ppg(
+                                            conn,
+                                            &id,
+                                            &oke[0].customer_name.to_uppercase(),
+                                            &resp.TOTAL_ESTIMATED_COSTS,
+                                        ) {
+                                            Ok(_) => Ok(vec![resp]),
+                                            Err(_) => Err(Error::from(CustomError::new(""))),
+                                        }
+                                    }
+                                    Err(e) => Err(Error::from(CustomError::new(""))),
                                 }
                             }
                             Err(e) => Err(Error::from(CustomError::new(""))),

@@ -161,6 +161,12 @@ pub struct ScWorkorder {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScProfile {
+    pub old: Vec<ScCustomer>,
+    pub new: Vec<ScDetail>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScCustomer {
     pub customer_id: i64,
     pub customer_name: String,
@@ -204,13 +210,23 @@ pub struct ScResult {
 pub struct ScCallback {
     pub sc_id: i32,
     pub customer_id: i64,
+    #[serde(skip_deserializing)]
     pub score: i32,
+    #[serde(skip_deserializing)]
     pub sec: String,
     pub product_id: i32,
+    #[serde(skip_deserializing)]
     pub product_name: String,
+    #[serde(skip_deserializing)]
     pub promo_id: i32,
+    #[serde(skip_deserializing)]
     pub promo_code: String,
+    #[serde(skip_deserializing)]
     pub promo_descr: String,
+    #[serde(skip_deserializing)]
+    pub bill_freq: i32,
+    #[serde(skip_deserializing)]
+    pub reason: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -277,14 +293,16 @@ pub struct ScCalculate {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ScCalc {
-    pub cal_id: String,
-}
-
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Response {
     pub data: Box<RawValue>,
     pub message: String,
     pub status: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct FileUpload {
+    pub file_name: String,
+    pub size: i64,
+    pub file_path: String,
+    pub type_file: String,
 }
