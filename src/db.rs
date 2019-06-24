@@ -1,7 +1,7 @@
 
 use crate::model::{
     Request, ScAddon, ScBasic, ScCallback, ScCustomer, ScDetail, ScELC, ScPackages, ScResult, ScTB,
-    ScTD, ScTDB, ScWorkorder, Token, User,
+    ScTD, ScTDB, ScWorkorder, Token, User, ScCalculate,
 };
 use chrono::Local;
 use log::{debug, info, trace, warn};
@@ -72,7 +72,7 @@ pub fn get_login(conn: &mut Conn, username: &str, password: &str) -> Result<Opti
             full_name, email,  user_type, role_name, brand, branch, region_name,
             application_id, avatar, null as token 
             from V_SC_USER_LOGIN where user_name=:username and password=:pass limit 1",
-            params! {"username" => username, "pass" => password},)
+            params! {"username" => &username, "pass" => &password},)
                 .map(|r| r.map(|x| x.unwrap())
                     .map(|mut row| {
                         User{
@@ -109,8 +109,8 @@ pub fn TrxToken(conn: &mut Conn, employee_id: &i32, token: &str) -> Result<(), E
                                 VALUES
                                 (:employee_id, :token, NOW())",
                 params! {
-                        "employee_id" => employee_id,
-                        "token" => token,
+                        "employee_id" => &employee_id,
+                        "token" => &token,
                 },
             )
             .unwrap();
@@ -128,7 +128,7 @@ pub fn TrxLogout(conn: &mut Conn, employee_id: &i32) -> Result<(), Error> {
             t.prep_exec(
                 "UPDATE SC_TOKEN SET LAST_LOGOUT = NOW() WHERE EMPLOYEE_ID = :employee_id and LAST_LOGOUT IS NULL",
                 params! {
-                        "employee_id" => employee_id,
+                        "employee_id" => &employee_id,
                 },
             )
             .unwrap();
@@ -142,7 +142,7 @@ pub fn TrxLogout(conn: &mut Conn, employee_id: &i32) -> Result<(), Error> {
 pub fn get_token(conn: &mut Conn, req: &Token) -> Result<bool, Error> {
     let token = conn
         .prep_exec(
-            "select TOKEN from SC_TOKEN where EMPLOYEE_ID=:employee_id LIMIT 1",
+            "SELECT TOKEN FROM SC_TOKEN WHERE EMPLOYEE_ID=:employee_id ORDER BY LAST_LOGIN DESC LIMIT 1",
             params! {"employee_id" =>&req.uid},
         )
         .map(|result| {
@@ -312,12 +312,12 @@ pub fn TrxResult(conn: &mut Conn, req: &ScResult) -> Result<(), Error> {
                             VALUES
                                 (:customer_id, :tb_id, :tdb_id, :td_id, :ec_id, :employee_id, :latitude, :longitude, NOW())",
                             params!{
-                                "customer_id" => req.customer_id.clone(),
-                                "tb_id" => req.tb_id.clone(),
-                                "tdb_id" => req.tdb_id.clone(),
-                                "td_id" => req.td_id.clone(),
-                                "ec_id" => req.ec_id.clone(),
-                                "employee_id" => req.employee_id.clone(),
+                                "customer_id" => &req.customer_id.clone(),
+                                "tb_id" => &req.tb_id.clone(),
+                                "tdb_id" => &req.tdb_id.clone(),
+                                "td_id" => &req.td_id.clone(),
+                                "ec_id" => &req.ec_id.clone(),
+                                "employee_id" => &req.employee_id.clone(),
                                 "latitude" => &req.latitude.clone(),
                                 "longitude" => &req.longitude.clone(),
                             })
@@ -331,11 +331,23 @@ pub fn TrxResult(conn: &mut Conn, req: &ScResult) -> Result<(), Error> {
 
 pub fn getCallback(conn: &mut Conn, customer_id: &i64) -> Result<Vec<ScCallback>, Error> {
     let call = conn.prep_exec("
-        SELECT A.SC_ID, A.CUSTOMER_ID, C.SCORE, C.SEC, E.PRODUCT_ID, E.PRODUCT_NAME, E.PROMO_ID, E.PROMO_CODE, E.PROMO_DESCR FROM SC_RESULT_NEW A
+        SELECT A.SC_ID, A.CUSTOMER_ID, C.SCORE, C.SEC,
+        CASE WHEN D.SOURCE = 'N' THEN E.PRODUCT_ID ELSE F.PRODUCT_ID END AS PRODUCT_ID,
+        CASE WHEN D.SOURCE = 'N' THEN E.PRODUCT_NAME ELSE G.PRODUCT_NAME END AS PRODUCT_NAME, 
+        CASE WHEN D.SOURCE = 'N' THEN E.PROMO_ID ELSE F.PROMO_ID END AS PROMO_ID,
+        CASE WHEN D.SOURCE = 'N' THEN E.PROMO_CODE ELSE H.PROMOTION_CODE END AS PROMO_CODE, 
+        CASE WHEN D.SOURCE = 'N' THEN E.PROMO_DESCR ELSE H.PROMOTION_DESC END AS PROMO_DESCR, 
+        CASE WHEN D.SOURCE = 'N' THEN E.BILL_FREQ ELSE F.BF END AS BILL_FREQ,
+        CASE WHEN D.SOURCE = 'N' THEN 'REJECT' ELSE 'APPROVE' END AS REASON
+        FROM SC_RESULT_NEW A
         JOIN SC_RESULT_SCORE B ON A.SC_ID = B.SC_ID
         JOIN SC_SCORE C ON B.SEC_ID = C.SEC_ID
         JOIN SC_CALLBACK D ON B.SCORE_ID = D.SCORE_ID
-        JOIN SC_MAPPING_PRODUCT E ON D.MAP_ID = E.MAP_ID WHERE A.CUSTOMER_ID = :id",  params!{"id" => &customer_id})
+        LEFT JOIN SC_MAPPING_PRODUCT E ON D.MAP_ID = E.MAP_ID
+        LEFT JOIN SC_CUSTOMER F ON D.MAP_ID = F.PRODUCT_ID  AND D.MAT_ID = F.PROMO_ID
+        LEFT JOIN valsys_prod.VAL_PRODUCT_PRICE2 G ON G.PRODUCT_ID = F.PRODUCT_ID
+        LEFT JOIN valsys_prod.M_PROMOTION H ON F.PROMO_ID = H.PROMOTION_ID
+        WHERE A.CUSTOMER_ID = :id",  params!{"id" => &customer_id})
         .map(|result| {
             result
                 .map(|x| x.unwrap())
@@ -350,6 +362,8 @@ pub fn getCallback(conn: &mut Conn, customer_id: &i64) -> Result<Vec<ScCallback>
                         promo_id: row.take("PROMO_ID").unwrap(),
                         promo_code: row.take("PROMO_CODE").unwrap(),
                         promo_descr: row.take("PROMO_DESCR").unwrap(),
+                        bill_freq: row.take("BILL_FREQ").unwrap(),
+                        reason: row.take("REASON").unwrap(),
                     }
                 })
                 .collect()
@@ -372,7 +386,8 @@ pub fn getSimulation(
         .prep_exec(
             "
         SELECT 0 AS SC_ID, D.CUSTOMER_ID, B.SCORE, B.SEC, A.PROD_TS AS PRODUCT_ID, 
-        E.PRODUCT_NAME, E.PROMO_ID, E.PROMO_CODE, E.PROMO_DESCR FROM SC_MATRIX A 
+        E.PRODUCT_NAME, E.PROMO_ID, E.PROMO_CODE, E.PROMO_DESCR, E.BILL_FREQ, '' AS REASON
+        FROM SC_MATRIX A 
         JOIN SC_SCORE B ON A.SCORE = B.SCORE JOIN SC_WORKORDER C
         ON A.REGION = C.REGION JOIN SC_CUSTOMER D
         ON A.PROD_SLS = D.PRODUCT_ID AND A.BF_PROD_SLS = D.BF
@@ -400,6 +415,8 @@ pub fn getSimulation(
                     promo_id: row.take("PROMO_ID").unwrap(),
                     promo_code: row.take("PROMO_CODE").unwrap(),
                     promo_descr: row.take("PROMO_DESCR").unwrap(),
+                    bill_freq: row.take("BILL_FREQ").unwrap(),
+                    reason: row.take("REASON").unwrap(),
                 })
                 .collect()
         });
@@ -407,7 +424,6 @@ pub fn getSimulation(
         Ok(ok) => Ok(ok),
         Err(e) => Err(e),
     }
-
 }
 
 pub fn TrxDetail(conn: &mut Conn, req: &ScDetail, opts: Option<i32>) -> Result<(), Error> {
@@ -477,7 +493,7 @@ pub fn TrxDetail(conn: &mut Conn, req: &ScDetail, opts: Option<i32>) -> Result<(
 pub fn getDetail(conn: &mut Conn, customer_id: &i64) -> Result<Vec<ScDetail>, Error> {
     let detail = conn.prep_exec(
         "SELECT CUSTOMER_ID, CUSTOMER_NAME, ADDRESS, MOBILE_PHONE, HOME_PHONE, EXTRA_PHONE, WHATSAPP, GENDER, EMAIL FROM SC_RESULT_DETAIL WHERE CUSTOMER_ID = :id",
-        params! {"id" => customer_id},
+        params! {"id" => &customer_id},
     )
     .map(|result| {
         result
@@ -508,7 +524,7 @@ pub fn getCalculate(conn: &mut Conn, customer_id: &i64) -> Result<Option<ScPacka
         .prep_exec(
             "SELECT BRAND, PROMO_ID, PROSPECT_TYPE, HW_STATUS, CUSTOMER_CLASS, HOUSE_STATUS, 
         FIRST_PAYMENT, INET_ROUTER, INET_ADDON, PRODUCT FROM SC_V_CALCULATE WHERE CUSTOMER_ID = :id",
-            params! {"id" => customer_id},
+            params! {"id" => &customer_id},
         )
         .map(|r| {
             r.map(|x| x.unwrap())
@@ -534,6 +550,41 @@ pub fn getCalculate(conn: &mut Conn, customer_id: &i64) -> Result<Option<ScPacka
         Some(calculate) => Ok(Some(calculate)),
         _ => return Ok(None),
     }
+}
+
+pub fn TrxCalculate(conn: &mut Conn, req: &ScCalculate, callback_id: &i32) -> Result<(), Error> {
+    let _ = conn
+        .start_transaction(false, None, None)
+        .and_then(|mut t| {
+            t.prep_exec("INSERT INTO SC_CALCULATE
+                                (CALLBACK_ID, COST_BASIC, COST_ADDON, COST_INET_ADDON, COST_INET_ROUTER,
+                                 COST_HD_CHARGE, BP_CHARGE, DEC_HD_CHARGE, ESTIMATED_iNSTALLATION,
+                                 ESTIMATED_PACKAGE, ESTIMATED_ADDON, ESTIMATED_PROMO,TOTAL_ESTIMATED_COST)
+                            VALUES
+                                (:callback_id, :cost_basic, :cost_addon, :cost_inet_addon, :cost_inet_router,
+                                 :cost_hd_charge, :bp_charge, :dec_hd_charge, :estimated_installation,
+                                 :estimated_package, :estimated_addon, :estimated_promo, :total_estimated_cost)",
+                            params!{
+                                "callback_id" => &callback_id,
+                                "cost_basic" => &req.COST_PACKAGE.clone(),
+                                "cost_addon" => &req.COST_ALACARTE.clone(),
+                                "cost_inet_addon" => &req.COST_INTERNET_ADDON.clone(),
+                                "cost_inet_router" => &req.COST_INTERNET_ROUTER.clone(),
+                                "cost_hd_charge" => &req.COST_HD_CHARGE.clone(),
+                                "bp_charge" => &req.BELI_PUTUS_CHARGE.clone(),
+                                "dec_hd_charge" => &req.DECODER_HD_CHARGE.clone(),
+                                "estimated_installation" => &req.ESTIMATED_INSTALLATION.clone(),
+                                "estimated_package" => &req.ESTIMATED_COST_PACKAGE.clone(),
+                                "estimated_addon" => &req.ESTIMATED_ALACARTE.clone(),
+                                "estimated_promo" => &req.ESTIMATED_PROMO.clone(),
+                                "total_estimated_cost" => &req.TOTAL_ESTIMATED_COSTS.clone(),
+                            })
+                .unwrap();
+            t.commit().is_ok();
+            Ok(())
+        })
+        .unwrap();
+    Ok(())
 }
 
 pub fn push_ppg(conn: &mut Conn, customer_id: &i64, customer_name: &String, amount: &i64) -> Result<(), Error> {
