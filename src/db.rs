@@ -275,7 +275,16 @@ pub fn get_list(conn: &mut Conn, id: i32) -> Result<Vec<ScWorkorder>, Error> {
 
 pub fn get_profile(conn: &mut Conn, id: i32) -> Result<Vec<ScCustomer>, Error> {
     let sc_cust = conn.prep_exec(
-            "SELECT CUSTOMER_ID, CUSTOMER_NAME, ADDRESS, MOBILE_PHONE, HOME_PHONE, EXTRA_PHONE, WHATSAPP, GENDER, EMAIL, FOTO FROM SC_CUSTOMER WHERE CUSTOMER_ID = :id",
+            "SELECT CUSTOMER_ID, CUSTOMER_NAME, CUSTOMER_NAME_UPDATE, CUSTOMER_NAME_UPDATE_CHECK,
+            ADDRESS, ADDRESS_UPDATE, ADDRESS_UPDATE_CHECK,
+            MOBILE_PHONE, MOBILE_PHONE_UPDATE, MOBILE_PHONE_UPDATE_CHECK,
+            HOME_PHONE, HOME_PHONE_UPDATE, HOME_PHONE_UPDATE_CHECK,
+            EXTRA_PHONE, EXTRA_PHONE_UPDATE, EXTRA_PHONE_UPDATE_CHECK,
+            WHATSAPP, WHATSAPP_UPDATE, WHATSAPP_UPDATE_CHECK,
+            GENDER, GENDER_UPDATE, GENDER_UPDATE_CHECK,
+            EMAIL, EMAIL_UPDATE, EMAIL_UPDATE_CHECK,
+            FOTO, FOTO_UPDATE, FOTO_UPDATE_CHECK
+            FROM SC_V_CUSTOMER WHERE CUSTOMER_ID = :id",
             params! {"id" => id},
         )
         .map(|result| {
@@ -285,14 +294,32 @@ pub fn get_profile(conn: &mut Conn, id: i32) -> Result<Vec<ScCustomer>, Error> {
                     ScCustomer {
                         customer_id : row.take("CUSTOMER_ID").unwrap(),
                         customer_name: row.take("CUSTOMER_NAME").unwrap(),
+                        customer_name_update: row.take("CUSTOMER_NAME_UPDATE").unwrap(),
+                        customer_name_update_check: row.take("CUSTOMER_NAME_UPDATE_CHECK").unwrap(),
                         address: row.take("ADDRESS").unwrap(),
+                        address_update: row.take("ADDRESS_UPDATE").unwrap(),
+                        address_update_check: row.take("ADDRESS_UPDATE_CHECK").unwrap(),
                         mobile_phone: row.take("MOBILE_PHONE").unwrap(),
+                        mobile_phone_update: row.take("MOBILE_PHONE_UPDATE").unwrap(),
+                        mobile_phone_update_check: row.take("MOBILE_PHONE_UPDATE_CHECK").unwrap(),
                         home_phone: row.take("HOME_PHONE").unwrap(),
+                        home_phone_update: row.take("HOME_PHONE_UPDATE").unwrap(),
+                        home_phone_update_check: row.take("HOME_PHONE_UPDATE_CHECK").unwrap(),
                         extra_phone: row.take("EXTRA_PHONE").unwrap(),
+                        extra_phone_update: row.take("EXTRA_PHONE_UPDATE").unwrap(),
+                        extra_phone_update_check: row.take("EXTRA_PHONE_UPDATE_CHECK").unwrap(),
                         whatsapp: row.take("WHATSAPP").unwrap(),
+                        whatsapp_update: row.take("WHATSAPP_UPDATE").unwrap(),
+                        whatsapp_update_check: row.take("WHATSAPP_UPDATE_CHECK").unwrap(),
                         gender: row.take("GENDER").unwrap(),
+                        gender_update: row.take("GENDER_UPDATE").unwrap(),
+                        gender_update_check: row.take("GENDER_UPDATE_CHECK").unwrap(),
                         email: row.take("EMAIL").unwrap(),
+                        email_update: row.take("EMAIL_UPDATE").unwrap(),
+                        email_update_check: row.take("EMAIL_UPDATE_CHECK").unwrap(),
                         foto: row.take("FOTO").unwrap(),
+                        foto_update: row.take("FOTO_UPDATE").unwrap(),
+                        foto_update_check: row.take("FOTO_UPDATE_CHECK").unwrap(),
                     }
                 })
                 .collect()
@@ -433,9 +460,9 @@ pub fn TrxDetail(conn: &mut Conn, req: &ScDetail, opts: Option<i32>) -> Result<(
                 .start_transaction(false, None, None)
                 .and_then(|mut t| {
                     t.prep_exec("INSERT INTO SC_RESULT_DETAIL
-                                        (CUSTOMER_ID, CUSTOMER_NAME, ADDRESS, MOBILE_PHONE, HOME_PHONE, EXTRA_PHONE, WHATSAPP, GENDER, EMAIL, CREATED_DATE)
+                                        (CUSTOMER_ID, CUSTOMER_NAME, ADDRESS, MOBILE_PHONE, HOME_PHONE, EXTRA_PHONE, WHATSAPP, GENDER, EMAIL, FOTO, CREATED_DATE)
                                     VALUES
-                                        (:customer_id, :customer_name, :address, :mobile_phone, :home_phone, :extra_phone, :whatsapp, :gender, :email, NOW())",
+                                        (:customer_id, :customer_name, :address, :mobile_phone, :home_phone, :extra_phone, :whatsapp, :gender, :email, :foto, NOW())",
                                     params!{
                                         "customer_id" => &req.customer_id.clone(),
                                         "customer_name" => &req.customer_name.clone(),
@@ -446,6 +473,7 @@ pub fn TrxDetail(conn: &mut Conn, req: &ScDetail, opts: Option<i32>) -> Result<(
                                         "whatsapp" => &req.whatsapp.clone(),
                                         "gender" => &req.gender.clone(),
                                         "email" => &req.email.clone(),
+                                        "foto" => &req.foto.clone(),
                                     })
                         .unwrap();
                     t.commit().is_ok();
@@ -466,6 +494,7 @@ pub fn TrxDetail(conn: &mut Conn, req: &ScDetail, opts: Option<i32>) -> Result<(
                                         WHATSAPP = :whatsapp,
                                         GENDER = :gender,  
                                         EMAIL = :email,
+                                        FOTO = :foto,
                                         CREATED_DATE = NOW()
                                         WHERE CUSTOMER_ID =:customer_id",
                         params! {
@@ -477,6 +506,7 @@ pub fn TrxDetail(conn: &mut Conn, req: &ScDetail, opts: Option<i32>) -> Result<(
                             "whatsapp" => &req.whatsapp.clone(),
                             "gender" => &req.gender.clone(),
                             "email" => &req.email.clone(),
+                            "foto" => &req.foto.clone(),
                             "customer_id" => &req.customer_id.clone(),
                         },
                     )
@@ -492,7 +522,7 @@ pub fn TrxDetail(conn: &mut Conn, req: &ScDetail, opts: Option<i32>) -> Result<(
 
 pub fn getDetail(conn: &mut Conn, customer_id: &i64) -> Result<Vec<ScDetail>, Error> {
     let detail = conn.prep_exec(
-        "SELECT CUSTOMER_ID, CUSTOMER_NAME, ADDRESS, MOBILE_PHONE, HOME_PHONE, EXTRA_PHONE, WHATSAPP, GENDER, EMAIL FROM SC_RESULT_DETAIL WHERE CUSTOMER_ID = :id",
+        "SELECT CUSTOMER_ID, CUSTOMER_NAME, ADDRESS, MOBILE_PHONE, HOME_PHONE, EXTRA_PHONE, WHATSAPP, GENDER, EMAIL, FOTO FROM SC_RESULT_DETAIL WHERE CUSTOMER_ID = :id",
         params! {"id" => &customer_id},
     )
     .map(|result| {
@@ -509,6 +539,7 @@ pub fn getDetail(conn: &mut Conn, customer_id: &i64) -> Result<Vec<ScDetail>, Er
                     whatsapp: row.take("WHATSAPP").unwrap(),
                     gender: row.take("GENDER").unwrap(),
                     email: row.take("EMAIL").unwrap(),
+                    foto: row.take("FOTO").unwrap(),
                 }
             })
             .collect()

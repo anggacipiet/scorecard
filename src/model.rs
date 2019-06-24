@@ -170,14 +170,32 @@ pub struct ScProfile {
 pub struct ScCustomer {
     pub customer_id: i64,
     pub customer_name: String,
+    pub customer_name_update: String,
+    pub customer_name_update_check: bool,
     pub address: String,
+    pub address_update: String,
+    pub address_update_check: bool,
     pub mobile_phone: String,
+    pub mobile_phone_update: String,
+    pub mobile_phone_update_check: bool,
     pub home_phone: String,
+    pub home_phone_update: String,
+    pub home_phone_update_check: bool,
     pub extra_phone: String,
+    pub extra_phone_update: String,
+    pub extra_phone_update_check: bool,
     pub whatsapp: String,
+    pub whatsapp_update: String,
+    pub whatsapp_update_check: bool,
     pub gender: String,
+    pub gender_update: String,
+    pub gender_update_check: bool,
     pub email: String,
+    pub email_update: String,
+    pub email_update_check: bool,
     pub foto: String,
+    pub foto_update: bool,
+    pub foto_update_check: bool,
     //pub created_date: NaiveDateTime,
 }
 
@@ -192,6 +210,7 @@ pub struct ScDetail {
     pub whatsapp: String,
     pub gender: String,
     pub email: String,
+    pub foto: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
