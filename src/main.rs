@@ -614,7 +614,7 @@ pub fn sc_upload(id: web::Path<String>, multipart: Multipart) -> impl Future<Ite
         .flatten()
         .collect()
         .map(|file| HttpResponse::Ok().json(json!({
-            "code": 200,
+            "message":"upload success".to_string(),
             "status": true,
             "data": file})))
         .map_err(|e| {
