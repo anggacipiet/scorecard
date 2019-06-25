@@ -290,7 +290,7 @@ pub fn sc_result(
             "data": e.to_string()}))),
     })
 }
-
+/*
 pub fn sc_edited(
     id: web::Path<i32>,
     req: web::Json<model::Request>,
@@ -331,7 +331,45 @@ pub fn sc_edited(
             "data": e.to_string()}))),
     })
 }
+*/
 
+pub fn sc_edited(
+    req: web::Json<model::Request>,
+    db: web::Data<db::Pool>,
+) -> impl Future<Item = HttpResponse, Error = Error> {
+    web::block(move || {
+        let mut conn = db.get().unwrap();
+        println!("request: {:?}", req);
+        let data = req.data.get();
+        let result = serde_json::from_str::<model::ScDetail>(&data).unwrap();
+        println!("data: {:?} request: {:?}", data, result);
+        match db::TrxLogs(&mut conn, &req.into_inner()) {
+            Ok(_) => {
+                match db::TrxDetail(&mut conn, &result) {
+                    Ok(_) => {
+                        match db::getDetail(&mut conn, &result.customer_id) {
+                            Ok(ok) => Ok(ok),
+                            Err(e) => Err(e),
+                        }
+                    },
+                    Err(e) => Err(e),
+                }
+            },
+            Err(e) => Err(e),
+        }  
+    })
+    .then(|res| match res {
+        Ok(edit) => Ok(HttpResponse::Ok().json(json!({
+            "message": "send data customer success".to_string(),
+            "status": true,
+            "data": edit,
+        }))),
+        Err(e) => Ok(HttpResponse::InternalServerError().json(json!({
+            "message": "send data customer failed".to_string(),
+            "status":false,
+            "data": e.to_string()}))),
+    })
+}
 pub fn sc_calculate(
     req: web::Json<model::Request>, 
     db: web::Data<db::Pool>
@@ -523,13 +561,13 @@ pub fn save_file(id: &String, field: Field) -> impl Future<Item = String, Error 
     println!("path : {:?}", path);
 
     let upload_file = format!("{}", &id.clone());
-    match create_dir_all(&upload_file) {
+    path.push(&upload_file);
+    println!("dir path : {:?}", path);
+    
+    match create_dir_all(&upload_file.clone()) {
         Ok(_) => {},
         Err(e) => return Either::A(err(error::ErrorInternalServerError(e))),
     }
-
-    path.push(upload_file);
-    println!("dir path : {:?}", path);
    
     let mut upload_file_path = path.as_os_str().to_str().unwrap().to_owned();
     println!("dir file upload : {:?}", upload_file_path);
@@ -651,8 +689,12 @@ fn main() -> std::io::Result<()> {
                         web::resource("/sc-elc/{tb_id}/{tdb_id}")
                             .route(web::post().to_async(sc_elc)),
                     )
-                    .service(
+                    /*.service(
                         web::resource("/sc-edited/{id}")
+                            .route(web::post().to_async(sc_edited)),
+                    )*/
+                    .service(
+                        web::resource("/sc-edited")
                             .route(web::post().to_async(sc_edited)),
                     )
                     .service(
