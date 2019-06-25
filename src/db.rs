@@ -453,6 +453,7 @@ pub fn getSimulation(
     }
 }
 
+/*
 pub fn TrxDetail(conn: &mut Conn, req: &ScDetail, opts: Option<i32>) -> Result<(), Error> {
     if let Some(o) = Some(opts) {
         if let Some(1) = o {
@@ -517,6 +518,36 @@ pub fn TrxDetail(conn: &mut Conn, req: &ScDetail, opts: Option<i32>) -> Result<(
                 .unwrap();
         }
     }
+    Ok(())
+}
+*/
+
+pub fn TrxDetail(conn: &mut Conn, req: &ScDetail) -> Result<(), Error> {
+    let _ = conn
+        .start_transaction(false, None, None)
+        .and_then(|mut t| {
+            t.prep_exec("REPLACE INTO SC_RESULT_DETAIL
+                                (CUSTOMER_ID, CUSTOMER_NAME, ADDRESS, MOBILE_PHONE, HOME_PHONE, EXTRA_PHONE, WHATSAPP, GENDER, EMAIL, FOTO, CREATED_DATE)
+                            VALUES
+                                (:customer_id, :customer_name, :address, :mobile_phone, :home_phone, :extra_phone, :whatsapp, :gender, :email, :foto, NOW())",
+                            params!{
+                                "customer_id" => &req.customer_id.clone(),
+                                "customer_name" => &req.customer_name.clone(),
+                                "address" => &req.address.clone(),
+                                "mobile_phone" => &req.mobile_phone.clone(),
+                                "home_phone" => &req.home_phone.clone(),
+                                "extra_phone" => &req.extra_phone.clone(),
+                                "whatsapp" => &req.whatsapp.clone(),
+                                "gender" => &req.gender.clone(),
+                                "email" => &req.email.clone(),
+                                "foto" => &req.foto.clone(),
+                            })
+                .unwrap();
+            t.commit().is_ok();
+            Ok(())
+        })
+    .unwrap();
+        
     Ok(())
 }
 
