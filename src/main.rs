@@ -217,16 +217,9 @@ fn sc_profile(
     web::block(move || {
         let mut conn = db.get().unwrap();
         match db::TrxLogs(&mut conn, &req.into_inner()) {
-            Ok(o) => {
+            Ok(_) => {
                 match db::get_profile(&mut conn, id.into_inner()) {
-                    Ok(ok) => {
-                        match db::getDetail(&mut conn, &ok[0].customer_id) {
-                            Ok(oke) => {
-                                Ok(ok)
-                            },
-                            Err(e) => Err(e),
-                        }
-                    },
+                    Ok(ok) => Ok(ok),
                     Err(e) => Err(e),
                 }
             },
@@ -494,19 +487,35 @@ fn get_filename() -> (String, String) {
 }
 
 /// Async IO file storage handler
-pub fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
-    let (name, path) = get_filename();
+pub fn save_file(id: &String, field: Field) -> impl Future<Item = String, Error = Error> {
+    /*let (name, path) = get_filename();
 
     let file = match File::create(path) {
         Ok(file) => file,
         Err(e) => return Either::A(err(error::ErrorInternalServerError(e))),
+    };*/
+    let raw = match field.content_disposition() {
+        Some(e) => e.parameters,
+        None => {
+            return Either::A(err(error::ErrorInternalServerError(
+                "no valid file",
+            )))
+        }
     };
+    println!("raw : {:?}", raw);
 
-    /*let file_name = match field.content_disposition().unwrap().get_filename() {
+    let file_name = match field.content_disposition().unwrap().get_filename() {
         Some(filename) => filename.replace(' ', "_").to_string(),
         None => return Either::A(err(error::ErrorInternalServerError("Couldn't read the filename.")))
     };
     println!("content-dispostition : {:?}", file_name);
+    
+    
+    let upload_file = format!("{}", &id.clone());
+    match create_dir_all(&upload_file) {
+        Ok(_) => {},
+        Err(e) => return Either::A(err(error::ErrorInternalServerError(e))),
+    }
 
     let mut path = PathBuf::new();
     path.push(
@@ -518,23 +527,24 @@ pub fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
                 .into(),
         ),
     );
-    path.push(file_name.clone());
-    
-    let upload_dir = path.push(path.as_os_str().to_str().unwrap().to_owned());
-    println!("dir path : {:?}", upload_dir);
+    println!("path : {:?}", path);
 
-    match create_dir_all(upload_dir) {
-        Ok(_) => {},
-        Err(e) => return Either::A(err(error::ErrorInternalServerError(e))),
-    }
-    let upload_file_path = format!("SC/{}", upload_dir);
-    let upload_file_path2 = upload_file_path.clone();
+    path.push(upload_file);
+    println!("dir path : {:?}", path);
+   
+    let upload_file_path = path.as_os_str().to_str().unwrap().to_owned();
+    println!("dir file upload : {:?}", upload_file_path);
 
-    let file = match File::create(upload_file_path2) {
+
+    let upload_dir = upload_file_path;
+    println!("dir upload : {:?}", upload_dir);
+
+    let file = match File::create(upload_dir) {
         Ok(file) => file,
         Err(e) => return Either::A(err(error::ErrorInternalServerError(e))),
     };
-    */
+    println!("file : {:?}", file);
+
     Either::B(
         field
             .fold((file, 0i64), move |(mut file, mut acc), bytes| {
@@ -551,7 +561,7 @@ pub fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
                     error::BlockingError::Canceled => MultipartError::Incomplete,
                 })
             })
-            .map(move |(_, _)| name)
+            .map(move |(_, _)| file_name)
             .map_err(|e| {
                 println!("save_file failed, {:?}", e);
                 error::ErrorInternalServerError(e)
@@ -560,11 +570,11 @@ pub fn save_file(field: Field) -> impl Future<Item = String, Error = Error> {
 }
 
 /// Handle multi-part stream forms
-pub fn sc_upload(multipart: Multipart) -> impl Future<Item = HttpResponse, Error = Error> {
-    
+pub fn sc_upload(id: web::Path<String>, multipart: Multipart) -> impl Future<Item = HttpResponse, Error = Error> {
+     
     multipart
         .map_err(error::ErrorInternalServerError)
-        .map(|field| save_file(field).into_stream())
+        .map(move |field| save_file(&id.clone(),field).into_stream())
         .flatten()
         .collect()
         .map(|file| HttpResponse::Ok().json(json!({
@@ -583,7 +593,7 @@ pub fn sc_upload(multipart: Multipart) -> impl Future<Item = HttpResponse, Error
 
 fn main() -> std::io::Result<()> {
     // Grab the env vars.
-    //dotenv().ok();
+    dotenv().ok();
     env::set_var("RUST_LOG", "actix_server=info,actix_web=info");
     env::set_var("RUST_BACKTRACE", "1");
     env_logger::init();
@@ -656,7 +666,7 @@ fn main() -> std::io::Result<()> {
                             .route(web::post().to_async(sc_calculate)),
                     )
                     .service(
-                        web::resource("/sc-upload")
+                        web::resource("/sc-upload/{id}")
                             .route(web::post().to_async(sc_upload)),
                     )
                     .service(
