@@ -509,13 +509,6 @@ pub fn save_file(id: &String, field: Field) -> impl Future<Item = String, Error 
         None => return Either::A(err(error::ErrorInternalServerError("Couldn't read the filename.")))
     };
     println!("content-dispostition : {:?}", file_name);
-    
-    
-    let upload_file = format!("{}", &id.clone());
-    match create_dir_all(&upload_file) {
-        Ok(_) => {},
-        Err(e) => return Either::A(err(error::ErrorInternalServerError(e))),
-    }
 
     let mut path = PathBuf::new();
     path.push(
@@ -529,17 +522,22 @@ pub fn save_file(id: &String, field: Field) -> impl Future<Item = String, Error 
     );
     println!("path : {:?}", path);
 
+    let upload_file = format!("{}", &id.clone());
+    match create_dir_all(&upload_file) {
+        Ok(_) => {},
+        Err(e) => return Either::A(err(error::ErrorInternalServerError(e))),
+    }
+
     path.push(upload_file);
     println!("dir path : {:?}", path);
    
-    let upload_file_path = path.as_os_str().to_str().unwrap().to_owned();
+    let mut upload_file_path = path.as_os_str().to_str().unwrap().to_owned();
     println!("dir file upload : {:?}", upload_file_path);
 
-
-    let upload_dir = upload_file_path;
+    let upload_dir = upload_file_path.push_str(&file_name.clone());
     println!("dir upload : {:?}", upload_dir);
 
-    let file = match File::create(upload_dir) {
+    let file = match File::create(upload_file_path) {
         Ok(file) => file,
         Err(e) => return Either::A(err(error::ErrorInternalServerError(e))),
     };
