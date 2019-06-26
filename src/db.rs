@@ -1,7 +1,7 @@
 
 use crate::model::{
     Request, ScAddon, ScBasic, ScCallback, ScCustomer, ScDetail, ScELC, ScPackages, ScResult, ScTB,
-    ScTD, ScTDB, ScWorkorder, Token, User, ScCalculate,
+    ScTD, ScTDB, ScWorkorder, Token, User, ScCalculate, FileUpload,
 };
 use chrono::Local;
 use log::{debug, info, trace, warn};
@@ -704,4 +704,28 @@ pub fn push_ppg(conn: &mut Conn, customer_id: &i64, customer_name: &String, amou
             Ok(())
         },
     } 
+}
+
+pub fn TrxFile(conn: &mut Conn, req: &FileUpload) -> Result<(), Error> {
+    let _ = conn
+        .start_transaction(false, None, None)
+        .and_then(|mut t| {
+            t.prep_exec("REPLACE INTO SC_RESULT_FILE
+                                (WO_ID, FILE_TYPE, FILE_SIZE, FILE_NAME, FILE_PATH)
+                            VALUES
+                                (:wo_id, :file_type, :file_size, :file_name, :file_path)",
+                            params!{
+                                "wo_id" => &req.wo_id.clone(),
+                                "file_type" => &req.file_type.clone(),
+                                "file_size" => &req.file_size.clone(),
+                                "file_name" => &req.file_name.clone(),
+                                "file_path" => &req.file_path.clone(),
+                            })
+                .unwrap();
+            t.commit().is_ok();
+            Ok(())
+        })
+    .unwrap();
+        
+    Ok(())
 }

@@ -320,8 +320,9 @@ pub struct Response {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct FileUpload {
+    pub wo_id: i64,
     pub file_name: String,
-    pub size: i64,
+    pub file_size: i64,
     pub file_path: String,
-    pub type_file: String,
+    pub file_type: String,
 }
