@@ -32,11 +32,12 @@ use actix_web::{
 use actix_multipart::{Field, Multipart, MultipartError};
 use csrf_token::CsrfTokenGenerator;
 use chrono::Duration;
+use chrono::prelude::{Date, Datelike, Local, Utc};
 use actix_files::Files;
 use dotenv::dotenv;
 use futures::{
-    future::{err, Either},
-    {Future, Stream},
+    future::{err, ok, result, Either},
+    {Future, Stream, IntoFuture},
 };
 use rand::{
     distributions::Alphanumeric,
@@ -258,7 +259,8 @@ pub fn sc_result(
                 Ok(_) => {
                     match db::TrxResult(&mut conn, &result) {
                         Ok(_) => {
-                            match db::getCallback(&mut conn, &result.customer_id) {
+                            match db::getCallback(&mut conn, &result.customer_id, &result.tb_id, &result.tdb_id,
+                            &result.td_id, &result.ec_id) {
                                 Ok(cb) => Ok(cb),
                                 Err(e) => Err(e),
                             }
@@ -370,6 +372,40 @@ pub fn sc_edited(
             "data": e.to_string()}))),
     })
 }
+
+pub fn sc_reason(
+    req: web::Json<model::Request>,
+    db: web::Data<db::Pool>,
+) -> impl Future<Item = HttpResponse, Error = Error> {
+    web::block(move || {
+        let mut conn = db.get().unwrap();
+        println!("request: {:?}", req);
+        let data = req.data.get();
+        let result = serde_json::from_str::<model::ScReason>(&data).unwrap();
+        println!("data: {:?} request: {:?}", data, result);
+        match db::TrxLogs(&mut conn, &req.into_inner()) {
+            Ok(_) => {
+                match db::TrxReason(&mut conn, &result) {
+                    Ok(_) => Ok(()),
+                    Err(e) => Err(e),
+                }
+            },
+            Err(e) => Err(e),
+        }  
+    })
+    .then(|res| match res {
+        Ok(edit) => Ok(HttpResponse::Ok().json(json!({
+            "message": "send data customer success".to_string(),
+            "status": true,
+            "data": "save reason success",
+        }))),
+        Err(e) => Ok(HttpResponse::InternalServerError().json(json!({
+            "message": "send data customer failed".to_string(),
+            "status":false,
+            "data": e.to_string()}))),
+    })
+}
+
 pub fn sc_calculate(
     req: web::Json<model::Request>, 
     db: web::Data<db::Pool>
@@ -500,53 +536,36 @@ pub fn sc_logout(
     })
 }
 
-/// Small utility function that generates random filenames and paths
-fn get_filename() -> (String, String) {
-    let mut rng = thread_rng();
-    let file_name: String = iter::repeat(())
-        .map(|()| rng.sample(Alphanumeric))
-        .take(16)
-        .collect::<String>()
-        .as_str()
-        .into();
-
-    let mut path = PathBuf::new();
-    path.push(
-        env::var("STORAGE").unwrap_or(
-            env::current_dir()
-                .expect("Failed to get current directory!")
-                .to_str()
-                .unwrap()
-                .into(),
-        ),
-    );
-    path.push(file_name.clone());
-    (file_name, path.as_os_str().to_str().unwrap().to_owned())
-}
-
-/// Async IO file storage handler
-pub fn save_file(id: &String, field: Field) -> impl Future<Item = String, Error = Error> {
-    /*let (name, path) = get_filename();
-
-    let file = match File::create(path) {
-        Ok(file) => file,
-        Err(e) => return Either::A(err(error::ErrorInternalServerError(e))),
-    };*/
+// Async IO file storage handler
+pub fn save_file(id: &String, field: Field) -> impl Future<Item = model::FileUpload, Error = Error> {
+   
     let raw = match field.content_disposition() {
         Some(e) => e.parameters,
         None => {
             return Either::A(err(error::ErrorInternalServerError(
-                "no valid file",
+                "no valid parameters",
             )))
         }
     };
     println!("raw : {:?}", raw);
+  
+    let name = match field.content_disposition().unwrap().get_name() {
+        Some(key) => key.to_string(),
+        None => return Either::A(err(error::ErrorInternalServerError("Couldn't read the key.")))
+    };
+    println!("content-dispostition key : {:?}", name);
 
     let file_name = match field.content_disposition().unwrap().get_filename() {
         Some(filename) => filename.replace(' ', "_").to_string(),
         None => return Either::A(err(error::ErrorInternalServerError("Couldn't read the filename.")))
     };
-    println!("content-dispostition : {:?}", file_name);
+    println!("content-dispostition file : {:?}", file_name);
+
+    let days: Date<Local> = Local::today();
+    let years: String = format!("{}", days.year());
+    let month: String = format!("{}", days.month());
+    let upload_file = format!("{}", &id.clone());
+    let files = format!("{}", &file_name.clone());
 
     let mut path = PathBuf::new();
     path.push(
@@ -558,24 +577,25 @@ pub fn save_file(id: &String, field: Field) -> impl Future<Item = String, Error 
                 .into(),
         ),
     );
+    path.push(&years);
+    path.push(&month);
+    path.push(&upload_file);
     println!("path : {:?}", path);
 
-    let upload_file = format!("{}", &id.clone());
-    path.push(&upload_file);
-    println!("dir path : {:?}", path);
-    
-    match create_dir_all(&upload_file.clone()) {
+    match create_dir_all(&path) {
         Ok(_) => {},
         Err(e) => return Either::A(err(error::ErrorInternalServerError(e))),
     }
    
-    let mut upload_file_path = path.as_os_str().to_str().unwrap().to_owned();
+    let mut upload_file_path = path.clone();
     println!("dir file upload : {:?}", upload_file_path);
+    upload_file_path.push(&files);
 
-    let upload_dir = upload_file_path.push_str(&file_name.clone());
-    println!("dir upload : {:?}", upload_dir);
+    let file_path = format!("{}{}", "http://192.168.177.187/sfafile".to_string(), &upload_file_path.display());
 
-    let file = match File::create(upload_file_path) {
+    let wo_id: i64 = FromStr::from_str(&id.to_string()).unwrap();
+    
+    let file = match File::create(&upload_file_path) {
         Ok(file) => file,
         Err(e) => return Either::A(err(error::ErrorInternalServerError(e))),
     };
@@ -597,7 +617,10 @@ pub fn save_file(id: &String, field: Field) -> impl Future<Item = String, Error 
                     error::BlockingError::Canceled => MultipartError::Incomplete,
                 })
             })
-            .map(move |(_, _)| file_name)
+            .map(move |(_, acc)|model::FileUpload
+                    {wo_id: wo_id, file_name: file_name, 
+                    file_size: acc, file_path: file_path.replace("\\","/").to_string(), file_type: name}
+            )
             .map_err(|e| {
                 println!("save_file failed, {:?}", e);
                 error::ErrorInternalServerError(e)
@@ -606,17 +629,29 @@ pub fn save_file(id: &String, field: Field) -> impl Future<Item = String, Error 
 }
 
 /// Handle multi-part stream forms
-pub fn sc_upload(id: web::Path<String>, multipart: Multipart) -> impl Future<Item = HttpResponse, Error = Error> {
-     
+pub fn sc_upload(id: web::Path<String>, multipart: Multipart, db: web::Data<db::Pool>) -> impl Future<Item = HttpResponse, Error = Error> {   
+    let mut conn = db.get().unwrap();  
     multipart
         .map_err(error::ErrorInternalServerError)
         .map(move |field| save_file(&id.clone(),field).into_stream())
         .flatten()
         .collect()
-        .map(|file| HttpResponse::Ok().json(json!({
+        .map(move |file| {
+            for(i, files) in file.iter().enumerate() {
+                println!("{}: key={} value={}", i, files.wo_id, files.file_name);
+                let x = model::FileUpload{wo_id: files.wo_id, file_name: files.file_name.to_string(), file_size: files.file_size,
+                    file_path: files.file_path.to_string(), file_type: files.file_type.to_string()};
+                match db::TrxFile(&mut conn, &x.clone()) {
+                    Ok(_) => {},
+                    Err(_) =>{},
+                };
+            };
+            
+            HttpResponse::Ok().json(json!({
             "message":"upload success".to_string(),
             "status": true,
-            "data": file})))
+            "data": file}))
+        })
         .map_err(|e| {
             println!("failed: {}", e);
             e
@@ -700,6 +735,10 @@ fn main() -> std::io::Result<()> {
                     .service(
                         web::resource("/sc-result/{id}")
                             .route(web::post().to_async(sc_result)),
+                    )
+                    .service(
+                        web::resource("/sc-reason")
+                            .route(web::post().to_async(sc_reason)),
                     )
                     .service(
                         web::resource("/sc-calculate")

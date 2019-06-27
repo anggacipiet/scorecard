@@ -1,7 +1,7 @@
 
 use crate::model::{
     Request, ScAddon, ScBasic, ScCallback, ScCustomer, ScDetail, ScELC, ScPackages, ScResult, ScTB,
-    ScTD, ScTDB, ScWorkorder, Token, User, ScCalculate,
+    ScTD, ScTDB, ScWorkorder, Token, User, ScCalculate, FileUpload, ScReason,
 };
 use chrono::Local;
 use log::{debug, info, trace, warn};
@@ -242,7 +242,9 @@ pub fn get_elc(conn: &mut Conn, tb_id: i32, tdb_id: i32) -> Result<Vec<ScELC>, E
 
 pub fn get_list(conn: &mut Conn, id: i32) -> Result<Vec<ScWorkorder>, Error> {
     let sc_wo = conn.prep_exec(
-            "SELECT WO_ID, CUSTOMER_ID, PROSPECT_NBR, ASSIGN_TO, SERVICES_ID, SERVICES_DESCR, SERVICES_CATEGORY, DESCR, SCHEDULE_DATE, REGION, LATITUDE, LONGITUDE, CREATED_DATE FROM SC_WORKORDER WHERE ASSIGN_TO = :id ORDER BY CREATED_DATE DESC",
+            "SELECT WO_ID, CUSTOMER_ID, PROSPECT_NBR, ASSIGN_TO, SERVICES_ID, SERVICES_DESCR, SERVICES_CATEGORY, 
+            DESCR, SCHEDULE_DATE, REGION, LATITUDE, LONGITUDE, CREATED_DATE, STATUS, STATUS_DESCR 
+            FROM SC_V_WORKORDER WHERE ASSIGN_TO = :id ORDER BY CREATED_DATE DESC",
             params! {"id" => id},
         )
         .map(|result| {
@@ -263,6 +265,8 @@ pub fn get_list(conn: &mut Conn, id: i32) -> Result<Vec<ScWorkorder>, Error> {
                         latitude: row.take("LATITUDE").unwrap(),
                         longitude: row.take("LONGITUDE").unwrap(),
                         created_date: row.take("CREATED_DATE").unwrap(),
+                        status: row.take("STATUS").unwrap(),
+                        status_descr: row.take("STATUS_DESCR").unwrap(),
                     }
                 })
                 .collect()
@@ -356,30 +360,26 @@ pub fn TrxResult(conn: &mut Conn, req: &ScResult) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn getCallback(conn: &mut Conn, customer_id: &i64) -> Result<Vec<ScCallback>, Error> {
+pub fn getCallback(conn: &mut Conn, customer_id: &i64, tb_id: &i32, tdb_id: &i32, td_id: &i32, elc_id: &i32,) -> Result<Vec<ScCallback>, Error> {
     let call = conn.prep_exec("
-        SELECT A.SC_ID, A.CUSTOMER_ID, C.SCORE, C.SEC,
-        CASE WHEN D.SOURCE = 'N' THEN E.PRODUCT_ID ELSE F.PRODUCT_ID END AS PRODUCT_ID,
-        CASE WHEN D.SOURCE = 'N' THEN E.PRODUCT_NAME ELSE G.PRODUCT_NAME END AS PRODUCT_NAME, 
-        CASE WHEN D.SOURCE = 'N' THEN E.PROMO_ID ELSE F.PROMO_ID END AS PROMO_ID,
-        CASE WHEN D.SOURCE = 'N' THEN E.PROMO_CODE ELSE H.PROMOTION_CODE END AS PROMO_CODE, 
-        CASE WHEN D.SOURCE = 'N' THEN E.PROMO_DESCR ELSE H.PROMOTION_DESC END AS PROMO_DESCR, 
-        CASE WHEN D.SOURCE = 'N' THEN E.BILL_FREQ ELSE F.BF END AS BILL_FREQ,
-        CASE WHEN D.SOURCE = 'N' THEN 'REJECT' ELSE 'APPROVE' END AS REASON
-        FROM SC_RESULT_NEW A
-        JOIN SC_RESULT_SCORE B ON A.SC_ID = B.SC_ID
-        JOIN SC_SCORE C ON B.SEC_ID = C.SEC_ID
-        JOIN SC_CALLBACK D ON B.SCORE_ID = D.SCORE_ID
-        LEFT JOIN SC_MAPPING_PRODUCT E ON D.MAP_ID = E.MAP_ID
-        LEFT JOIN SC_CUSTOMER F ON D.MAP_ID = F.PRODUCT_ID  AND D.MAT_ID = F.PROMO_ID
-        LEFT JOIN valsys_prod.VAL_PRODUCT_PRICE2 G ON G.PRODUCT_ID = F.PRODUCT_ID
-        LEFT JOIN valsys_prod.M_PROMOTION H ON F.PROMO_ID = H.PROMOTION_ID
-        WHERE A.CUSTOMER_ID = :id",  params!{"id" => &customer_id})
+        SELECT A.CALLBACK_ID, A.SC_ID, A.CUSTOMER_ID, A.SCORE, A.SEC, A.PRODUCT_ID, A.PRODUCT_NAME,
+        A.PROMO_ID, A.PROMO_CODE, A.PROMO_DESCR, A.BILL_FREQ, A.REASON
+        FROM SC_V_VALUE A JOIN SC_RESULT_NEW B
+        ON A.CUSTOMER_ID = B.CUSTOMER_ID AND A.SC_ID = B.SC_ID
+        WHERE A.CUSTOMER_ID = :id AND B.TB_ID = :tb_id AND B.TDB_ID = :tdb_id AND B.TD_ID = :td_id AND B.EC_ID = :ec_id ",
+        params!{
+            "id" => &customer_id,
+            "tb_id" => &tb_id,
+            "tdb_id" => &tdb_id,
+            "td_id" => &td_id,
+            "ec_id" => &elc_id,
+        })
         .map(|result| {
             result
                 .map(|x| x.unwrap())
                 .map(|mut row| {
                     ScCallback {
+                        id : row.take("CALLBACK_ID").unwrap(),
                         sc_id: row.take("SC_ID").unwrap(),
                         customer_id: row.take("CUSTOMER_ID").unwrap(),
                         score: row.take("SCORE").unwrap(),
@@ -412,7 +412,7 @@ pub fn getSimulation(
     let sim = conn
         .prep_exec(
             "
-        SELECT 0 AS SC_ID, D.CUSTOMER_ID, B.SCORE, B.SEC, A.PROD_TS AS PRODUCT_ID, 
+        SELECT 0 AS CALLBACK_ID, 0 AS SC_ID, D.CUSTOMER_ID, B.SCORE, B.SEC, A.PROD_TS AS PRODUCT_ID, 
         E.PRODUCT_NAME, E.PROMO_ID, E.PROMO_CODE, E.PROMO_DESCR, E.BILL_FREQ, '' AS REASON
         FROM SC_MATRIX A 
         JOIN SC_SCORE B ON A.SCORE = B.SCORE JOIN SC_WORKORDER C
@@ -433,6 +433,7 @@ pub fn getSimulation(
             result
                 .map(|x| x.unwrap())
                 .map(|mut row| ScCallback {
+                    id: row.take("CALLBACK_ID").unwrap(),
                     sc_id: row.take("SC_ID").unwrap(),
                     customer_id: row.take("CUSTOMER_ID").unwrap(),
                     score: row.take("SCORE").unwrap(),
@@ -704,4 +705,46 @@ pub fn push_ppg(conn: &mut Conn, customer_id: &i64, customer_name: &String, amou
             Ok(())
         },
     } 
+}
+
+pub fn TrxFile(conn: &mut Conn, req: &FileUpload) -> Result<(), Error> {
+    let _ = conn
+        .start_transaction(false, None, None)
+        .and_then(|mut t| {
+            t.prep_exec("REPLACE INTO SC_RESULT_FILE
+                                (WO_ID, FILE_TYPE, FILE_SIZE, FILE_NAME, FILE_PATH)
+                            VALUES
+                                (:wo_id, :file_type, :file_size, :file_name, :file_path)",
+                            params!{
+                                "wo_id" => &req.wo_id.clone(),
+                                "file_type" => &req.file_type.clone(),
+                                "file_size" => &req.file_size.clone(),
+                                "file_name" => &req.file_name.clone(),
+                                "file_path" => &req.file_path.clone(),
+                            })
+                .unwrap();
+            t.commit().is_ok();
+            Ok(())
+        })
+    .unwrap();
+        
+    Ok(())
+}
+
+pub fn TrxReason(conn: &mut Conn, req: &ScReason) -> Result<(), Error> {
+    let _ = conn
+        .start_transaction(false, None, None)
+        .and_then(|mut t| {
+            t.prep_exec("INSERT INTO SC_REASON(CALLBACK_ID, SC_ID, DESCR)VALUES(:cb_id, :sc_id, :descr)",
+            params!{
+                "cb_id" => &req.id.clone(),
+                "sc_id" => &req.sc_id.clone(),
+                "descr" => &req.descr.clone(),
+            })
+            .unwrap();
+            t.commit().is_ok();
+            Ok(())
+        })
+    .unwrap();
+    Ok(())
 }

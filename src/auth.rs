@@ -109,7 +109,7 @@ where
             } else {
                 error!("{}", "Error process authentication");
                 return Either::B(ok(req.into_response(
-                    HttpResponse::InternalServerError()
+                    HttpResponse::BadRequest()
                         .json(json!({
                             "message":"Error process authentication",
                             "status":false,
@@ -121,7 +121,7 @@ where
 
         error!("{}", "Error process authentication");
         Either::B(ok(req.into_response(
-            HttpResponse::InternalServerError()
+            HttpResponse::Forbidden()
                 .json(json!({
                     "message":"Error process authentication",
                     "status":false,

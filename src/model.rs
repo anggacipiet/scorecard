@@ -158,6 +158,8 @@ pub struct ScWorkorder {
     pub latitude: String,
     pub longitude: String,
     pub created_date: NaiveDateTime,
+    pub status: i32,
+    pub status_descr: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -227,12 +229,15 @@ pub struct ScResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScCallback {
+    pub id: i32,
     pub sc_id: i32,
+    #[serde(skip_deserializing)]
     pub customer_id: i64,
     #[serde(skip_deserializing)]
     pub score: i32,
     #[serde(skip_deserializing)]
     pub sec: String,
+    #[serde(skip_deserializing)]
     pub product_id: i32,
     #[serde(skip_deserializing)]
     pub product_name: String,
@@ -320,8 +325,16 @@ pub struct Response {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct FileUpload {
+    pub wo_id: i64,
     pub file_name: String,
-    pub size: i64,
+    pub file_size: i64,
     pub file_path: String,
-    pub type_file: String,
+    pub file_type: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ScReason {
+    pub id: i32,
+    pub sc_id: i32,
+    pub descr: String,
 }
