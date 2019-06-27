@@ -259,7 +259,8 @@ pub fn sc_result(
                 Ok(_) => {
                     match db::TrxResult(&mut conn, &result) {
                         Ok(_) => {
-                            match db::getCallback(&mut conn, &result.customer_id) {
+                            match db::getCallback(&mut conn, &result.customer_id, &result.tb_id, &result.tdb_id,
+                            &result.td_id, &result.ec_id) {
                                 Ok(cb) => Ok(cb),
                                 Err(e) => Err(e),
                             }
@@ -371,6 +372,40 @@ pub fn sc_edited(
             "data": e.to_string()}))),
     })
 }
+
+pub fn sc_reason(
+    req: web::Json<model::Request>,
+    db: web::Data<db::Pool>,
+) -> impl Future<Item = HttpResponse, Error = Error> {
+    web::block(move || {
+        let mut conn = db.get().unwrap();
+        println!("request: {:?}", req);
+        let data = req.data.get();
+        let result = serde_json::from_str::<model::ScReason>(&data).unwrap();
+        println!("data: {:?} request: {:?}", data, result);
+        match db::TrxLogs(&mut conn, &req.into_inner()) {
+            Ok(_) => {
+                match db::TrxReason(&mut conn, &result) {
+                    Ok(_) => Ok(()),
+                    Err(e) => Err(e),
+                }
+            },
+            Err(e) => Err(e),
+        }  
+    })
+    .then(|res| match res {
+        Ok(edit) => Ok(HttpResponse::Ok().json(json!({
+            "message": "send data customer success".to_string(),
+            "status": true,
+            "data": "save reason success",
+        }))),
+        Err(e) => Ok(HttpResponse::InternalServerError().json(json!({
+            "message": "send data customer failed".to_string(),
+            "status":false,
+            "data": e.to_string()}))),
+    })
+}
+
 pub fn sc_calculate(
     req: web::Json<model::Request>, 
     db: web::Data<db::Pool>
@@ -556,7 +591,7 @@ pub fn save_file(id: &String, field: Field) -> impl Future<Item = model::FileUpl
     println!("dir file upload : {:?}", upload_file_path);
     upload_file_path.push(&files);
 
-    let file_path = format!("{}{}", "http://192.168.177.184/".to_string(), &upload_file_path.display());
+    let file_path = format!("{}{}", "http://192.168.177.187/sfafile".to_string(), &upload_file_path.display());
 
     let wo_id: i64 = FromStr::from_str(&id.to_string()).unwrap();
     
@@ -700,6 +735,10 @@ fn main() -> std::io::Result<()> {
                     .service(
                         web::resource("/sc-result/{id}")
                             .route(web::post().to_async(sc_result)),
+                    )
+                    .service(
+                        web::resource("/sc-reason")
+                            .route(web::post().to_async(sc_reason)),
                     )
                     .service(
                         web::resource("/sc-calculate")
