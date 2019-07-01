@@ -591,7 +591,7 @@ pub fn save_file(id: &String, field: Field) -> impl Future<Item = model::FileUpl
     println!("dir file upload : {:?}", upload_file_path);
     upload_file_path.push(&files);
 
-    let file_path = format!("{}{}", "http://192.168.177.187/sfafile".to_string(), &upload_file_path.display());
+    let file_path = format!("{}{}", "http://192.168.177.187".to_string(), &upload_file_path.display());
 
     let wo_id: i64 = FromStr::from_str(&id.to_string()).unwrap();
     
@@ -619,7 +619,7 @@ pub fn save_file(id: &String, field: Field) -> impl Future<Item = model::FileUpl
             })
             .map(move |(_, acc)|model::FileUpload
                     {wo_id: wo_id, file_name: file_name, 
-                    file_size: acc, file_path: file_path.replace("\\","/").to_string(), file_type: name}
+                    file_size: acc, file_path: file_path.replace("\\","/").replace("http://192.168.177.187/filesfa/images/valsys/scorecard/","http://192.168.177.187/sfafile/valsys/scorecard/").to_string(), file_type: name}
             )
             .map_err(|e| {
                 println!("save_file failed, {:?}", e);

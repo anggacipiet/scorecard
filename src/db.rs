@@ -735,10 +735,11 @@ pub fn TrxReason(conn: &mut Conn, req: &ScReason) -> Result<(), Error> {
     let _ = conn
         .start_transaction(false, None, None)
         .and_then(|mut t| {
-            t.prep_exec("INSERT INTO SC_REASON(CALLBACK_ID, SC_ID, DESCR)VALUES(:cb_id, :sc_id, :descr)",
+            t.prep_exec("INSERT INTO SC_REASON(CALLBACK_ID, SC_ID, REASON_TYPE, DESCR)VALUES(:cb_id, :sc_id, :id, :descr)",
             params!{
                 "cb_id" => &req.id.clone(),
                 "sc_id" => &req.sc_id.clone(),
+                "id" => &req.reason_id.clone(),
                 "descr" => &req.descr.clone(),
             })
             .unwrap();
