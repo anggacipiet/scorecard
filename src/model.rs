@@ -336,5 +336,6 @@ pub struct FileUpload {
 pub struct ScReason {
     pub id: i32,
     pub sc_id: i32,
+    pub reason_id: i32,
     pub descr: String,
 }
