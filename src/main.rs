@@ -22,6 +22,7 @@ extern crate lazy_static;
 extern crate dotenv_codegen;
 
 
+
 // Exports Addr.
 //use actix::prelude::*;
 use actix_web::{
@@ -58,11 +59,12 @@ mod errors;
 mod client;
 mod failures;
 
+use crate::errors::AppError;
 use crate::token::{create_token, verify_token, decode_token};
 use crate::client::ScClient;
 
 fn sc_tb(req: web::Json<model::Request>, db: web::Data<db::Pool>) 
--> impl Future<Item = HttpResponse, Error = Error> {
+-> impl Future<Item = HttpResponse, Error = AppError> {
     web::block(move || {
         let mut conn = db.get().unwrap();
         match db::TrxLogs(&mut conn, &req.into_inner()) {
@@ -92,7 +94,7 @@ fn sc_tdb(
     id: web::Path<i32>,
     req: web::Json<model::Request>,
     db: web::Data<db::Pool>,
-) -> impl Future<Item = HttpResponse, Error = Error> {
+) -> impl Future<Item = HttpResponse, Error = AppError> {
     web::block(move || {
         let mut conn = db.get().unwrap();
         match db::TrxLogs(&mut conn, &req.into_inner()) {
@@ -122,7 +124,7 @@ fn sc_td(
     id: web::Path<i32>,
     req: web::Json<model::Request>,
     db: web::Data<db::Pool>,
-) -> impl Future<Item = HttpResponse, Error = Error> {
+) -> impl Future<Item = HttpResponse, Error = AppError> {
     web::block(move || {
         let mut conn = db.get().unwrap();
         match db::TrxLogs(&mut conn, &req.into_inner()) {
@@ -153,7 +155,7 @@ fn sc_elc(
     info: web::Path<(i32, i32)>,
     req: web::Json<model::Request>,
     db: web::Data<db::Pool>,
-) -> impl Future<Item = HttpResponse, Error = Error> {
+) -> impl Future<Item = HttpResponse, Error = AppError> {
     web::block(move || {
         let id = info.into_inner();
         let mut conn = db.get().unwrap();
@@ -184,7 +186,7 @@ fn sc_list(
     id: web::Path<i32>,
     req: web::Json<model::Request>,
     db: web::Data<db::Pool>,
-) -> impl Future<Item = HttpResponse, Error = Error> {
+) -> impl Future<Item = HttpResponse, Error = AppError> {
     web::block(move || {
         let mut conn = db.get().unwrap();
         match db::TrxLogs(&mut conn, &req.into_inner()) {
@@ -214,7 +216,7 @@ fn sc_profile(
     id: web::Path<i32>,
     req: web::Json<model::Request>,
     db: web::Data<db::Pool>,
-) -> impl Future<Item = HttpResponse, Error = Error> {
+) -> impl Future<Item = HttpResponse, Error = AppError> {
     web::block(move || {
         let mut conn = db.get().unwrap();
         match db::TrxLogs(&mut conn, &req.into_inner()) {
@@ -244,7 +246,7 @@ pub fn sc_result(
     id:  web::Path<i32>,
     req: web::Json<model::Request>, 
     db: web::Data<db::Pool>,
-) -> impl Future<Item = HttpResponse, Error = Error> {
+) -> impl Future<Item = HttpResponse, Error = AppError> {
     web::block(move || {
         let mut conn = db.get().unwrap();
         println!("request: {:?}", req);
@@ -338,7 +340,7 @@ pub fn sc_edited(
 pub fn sc_edited(
     req: web::Json<model::Request>,
     db: web::Data<db::Pool>,
-) -> impl Future<Item = HttpResponse, Error = Error> {
+) -> impl Future<Item = HttpResponse, Error = AppError> {
     web::block(move || {
         let mut conn = db.get().unwrap();
         println!("request: {:?}", req);
@@ -376,21 +378,25 @@ pub fn sc_edited(
 pub fn sc_reason(
     req: web::Json<model::Request>,
     db: web::Data<db::Pool>,
-) -> impl Future<Item = HttpResponse, Error = Error> {
+) -> impl Future<Item = HttpResponse, Error = AppError> {
     web::block(move || {
         let mut conn = db.get().unwrap();
-        println!("request: {:?}", req);
         let data = req.data.get();
         let result = serde_json::from_str::<model::ScReason>(&data).unwrap();
         println!("data: {:?} request: {:?}", data, result);
         match db::TrxLogs(&mut conn, &req.into_inner()) {
             Ok(_) => {
                 match db::TrxReason(&mut conn, &result) {
-                    Ok(_) => Ok(()),
-                    Err(e) => Err(e),
+                    Ok(_) => {
+                        match ScClient::Calculate(&mut ScClient::default(), &mut conn, &result.sc_id, &result.id) {
+                            Ok(ok) => Ok(ok),
+                            Err(e) => Err(e),
+                        }
+                    },
+                    Err(e) =>Err(e.into()),
                 }
             },
-            Err(e) => Err(e),
+            Err(e) =>  Err(e.into()),
         }  
     })
     .then(|res| match res {
@@ -406,47 +412,12 @@ pub fn sc_reason(
     })
 }
 
-pub fn sc_calculate(
-    req: web::Json<model::Request>, 
-    db: web::Data<db::Pool>
-) -> impl Future<Item = HttpResponse, Error = Error> {
-    web::block(move || {
-        let mut conn = db.get().unwrap();
-        let data = req.data.get();
-        let result = serde_json::from_str::<model::ScCallback>(&data).unwrap();
-        info!("data: {} id: {}", data, result.sc_id);
-        let id: i32 = FromStr::from_str(&result.sc_id.to_string()).unwrap();
-        let customer_id: i64 = FromStr::from_str(&result.customer_id.to_string()).unwrap();
-        println!("id : {:?}, {:?}", id, customer_id);
-        //match db::TrxLogs(&mut conn, &req.into_inner()) {
-        //   Ok(_) => {
-                match ScClient::Calculate(&mut ScClient::default(), &mut conn, &customer_id, &id) {
-                    Ok(ok) => Ok(ok),
-                    Err(e) => Err(e),
-                }
-        //    },
-        //    Err(e) => Err(e),
-        //}
-    })
-    .then(|res| match res {
-        Ok(calc) =>  Ok(HttpResponse::Ok().json(json!({
-                "message":"calculate success".to_string(),
-                "status": true,
-                "data": calc,
-            }))),
-        Err(e) => Ok(HttpResponse::InternalServerError().json(json!({
-                "message":"calculate failed".to_string(),
-                "status":false,
-                "data": e.to_string()}))),
-    })
-}
-
 pub fn sc_login(
     req: web::Json<model::Request>, 
     //id: Identity, 
     db: web::Data<db::Pool>
     //generator: web::Data<CsrfTokenGenerator>
-) -> impl Future<Item = HttpResponse, Error = Error> {
+) -> impl Future<Item = HttpResponse, Error = AppError> {
     web::block(move || {
         let mut conn = db.get().unwrap();
         let data = req.data.get();
@@ -508,7 +479,7 @@ pub fn sc_login(
 pub fn sc_logout(
     req: web::Json<model::Request>, 
     db: web::Data<db::Pool>
-) -> impl Future<Item = HttpResponse, Error = Error> {
+) -> impl Future<Item = HttpResponse, Error = AppError> {
     web::block(move || {
         let mut conn = db.get().unwrap();
         let id: i32 = FromStr::from_str(&req.user.employee_id.to_string()).unwrap();
@@ -665,10 +636,10 @@ pub fn sc_upload(id: web::Path<String>, multipart: Multipart, db: web::Data<db::
 fn main() -> std::io::Result<()> {
     // Grab the env vars.
     dotenv().ok();
-    env::set_var("RUST_LOG", "actix_server=info,actix_web=info");
+    env::set_var("RUST_LOG", "actix_server=info,actix_web=debug");
     env::set_var("RUST_BACKTRACE", "1");
     env_logger::init();
-    //let sys = actix::System::new("scorecard");
+    //let sys = actix_rt::System::new("scorecard");
     //let cpus = num_cpus::get();
     //let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let database_url = dotenv!("DATABASE_URL");
@@ -741,10 +712,6 @@ fn main() -> std::io::Result<()> {
                             .route(web::post().to_async(sc_reason)),
                     )
                     .service(
-                        web::resource("/sc-calculate")
-                            .route(web::post().to_async(sc_calculate)),
-                    )
-                    .service(
                         web::resource("/sc-upload/{id}")
                             .route(web::post().to_async(sc_upload)),
                     )
@@ -762,6 +729,7 @@ fn main() -> std::io::Result<()> {
     })
     .bind("127.0.0.1:8080")?
     .run()
+    //.start();
 
-    //let _ = sys.run();
+    //sys.run()
 }

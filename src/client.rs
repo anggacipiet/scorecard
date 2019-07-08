@@ -1,4 +1,4 @@
-use crate::model::{Response, ScCalculate, ScPackages};
+use crate::model::{Response, ScBasic, ScCalculate, ScPackages};
 use failure;
 use failure::Error;
 use lazy_static;
@@ -11,6 +11,7 @@ use serde::de::Deserialize;
 use serde_json::{json, map::Map, Value};
 
 use crate::db::{getCalculate, get_profile, push_ppg, Conn, TrxCalculate};
+use crate::errors::AppError;
 use crate::failures::CustomError;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -102,8 +103,12 @@ impl ScClient {
 
     }
 
-    pub fn Calculate(&mut self, conn: &mut Conn, id: &i64, cb_id: &i32) -> Result<Vec<ScCalculate>, Error> {
-
+    pub fn Calculate(
+        &mut self,
+        conn: &mut Conn,
+        sc_id: &i32,
+        cb_id: &i32,
+    ) -> Result<Vec<ScCalculate>, Error> {
         /*
         let req = r#"
         {
@@ -162,9 +167,22 @@ impl ScClient {
             Err(_) => Err(Error::from(CustomError::new("")))
         }
         */
-        match getCalculate(conn, &id) {
-            Ok(Some(ok)) => {
-                let v: Value = serde_json::to_value(ok).unwrap();
+        match getCalculate(conn, &sc_id, &cb_id) {
+            Ok(Some(oke)) => {
+                let req = json!({
+                    "brand_id": oke.brand_id,
+                    "promotion_id": oke.promotion_id,
+                    "prospect_type": oke.prospect_type,
+                    "hardware_status": oke.hardware_status,
+                    "customer_class": oke.customer_class,
+                    "house_status": oke.house_status,
+                    "first_payment": oke.first_payment,
+                    "internet_package_router": oke.internet_package_router,
+                    "internet_package_addon": oke.internet_package_addon,
+                    "package": oke.package
+                });
+                println!("req: {:?}", req);
+                let v: Value = serde_json::from_value(req).unwrap();
                 println!("request: {:?}", v);
                 let o = self.post("/api/Calculation/calculateEstimation", &v);
                 println!("response: {:?}", o);
@@ -172,32 +190,32 @@ impl ScClient {
                     Ok(ok) => {
                         let resp = serde_json::from_str::<ScCalculate>(&ok).unwrap();
                         println!("bind: {:?}", resp);
-                        match get_profile(conn, *id as i32) {
+                        match get_profile(conn, oke.customer_id) {
                             Ok(oke) => {
                                 println!("get name: {:?}", oke[0].customer_name);
                                 match TrxCalculate(conn, &resp, &cb_id) {
                                     Ok(_) => {
                                         match push_ppg(
                                             conn,
-                                            &id,
+                                            &oke[0].customer_id,
                                             &oke[0].customer_name.to_uppercase(),
                                             &resp.TOTAL_ESTIMATED_COSTS,
                                         ) {
                                             Ok(_) => Ok(vec![resp]),
-                                            Err(_) => Err(Error::from(CustomError::new(""))),
+                                            Err(_) => Err(Error::from(CustomError::new("PPG"))),
                                         }
                                     }
-                                    Err(e) => Err(Error::from(CustomError::new(""))),
+                                    Err(e) => Err(Error::from(CustomError::new("TRX CALC"))),
                                 }
                             }
-                            Err(e) => Err(Error::from(CustomError::new(""))),
+                            Err(e) => Err(Error::from(CustomError::new("GET PROFILES"))),
                         }
                     }
-                    Err(_) => Err(Error::from(CustomError::new(""))),
+                    Err(_) => Err(Error::from(CustomError::new("RESPONSE VALSYS"))),
                 }
             }
             Ok(None) => Ok(serde_json::from_value(json!(vec![{}])).unwrap()),
-            Err(_) => Err(Error::from(CustomError::new(""))),
+            Err(_) => Err(Error::from(CustomError::new("BUILD REQUEST"))),
         }
     }
 }

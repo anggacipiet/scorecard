@@ -58,12 +58,10 @@ pub fn TrxLogs(conn: &mut Conn, req: &Request) -> Result<(), Error> {
                                         "timelng" => &req.user.date_latlng.clone(),
                                         "data" =>  &req.data.get(),
                                         "process" => &req.action_package.clone(),
-                                })
-                        .unwrap();
+                                })?;
                         t.commit().is_ok();
                 Ok(())
-                })
-        .unwrap();
+                })?;
     Ok(())
 }
 
@@ -112,12 +110,10 @@ pub fn TrxToken(conn: &mut Conn, employee_id: &i32, token: &str) -> Result<(), E
                         "employee_id" => &employee_id,
                         "token" => &token,
                 },
-            )
-            .unwrap();
+            )?;
             t.commit().is_ok();
             Ok(())
-        })
-        .unwrap();
+        })?;
     Ok(())
 }
 
@@ -130,12 +126,10 @@ pub fn TrxLogout(conn: &mut Conn, employee_id: &i32) -> Result<(), Error> {
                 params! {
                         "employee_id" => &employee_id,
                 },
-            )
-            .unwrap();
+            )?;
             t.commit().is_ok();
             Ok(())
-        })
-        .unwrap();
+        })?;
     Ok(())
 }
 
@@ -351,12 +345,10 @@ pub fn TrxResult(conn: &mut Conn, req: &ScResult) -> Result<(), Error> {
                                 "employee_id" => &req.employee_id.clone(),
                                 "latitude" => &req.latitude.clone(),
                                 "longitude" => &req.longitude.clone(),
-                            })
-                .unwrap();
+                            })?;
             t.commit().is_ok();
             Ok(())
-        })
-        .unwrap();
+        })?;
     Ok(())
 }
 
@@ -542,13 +534,10 @@ pub fn TrxDetail(conn: &mut Conn, req: &ScDetail) -> Result<(), Error> {
                                 "gender" => &req.gender.clone(),
                                 "email" => &req.email.clone(),
                                 "foto" => &req.foto.clone(),
-                            })
-                .unwrap();
+                            })?;
             t.commit().is_ok();
             Ok(())
-        })
-    .unwrap();
-        
+        })?;
     Ok(())
 }
 
@@ -582,17 +571,19 @@ pub fn getDetail(conn: &mut Conn, customer_id: &i64) -> Result<Vec<ScDetail>, Er
     }
 }
 
-pub fn getCalculate(conn: &mut Conn, customer_id: &i64) -> Result<Option<ScPackages>, Error> {
+pub fn getCalculate(conn: &mut Conn, sc_id: &i32, cb_id: &i32) -> Result<Option<ScPackages>, Error> {
     let packages = conn
         .prep_exec(
-            "SELECT BRAND, PROMO_ID, PROSPECT_TYPE, HW_STATUS, CUSTOMER_CLASS, HOUSE_STATUS, 
-        FIRST_PAYMENT, INET_ROUTER, INET_ADDON, PRODUCT FROM SC_V_CALCULATE WHERE CUSTOMER_ID = :id",
-            params! {"id" => &customer_id},
+            "SELECT CUSTOMER_ID, BRAND, PROMO_ID, PROSPECT_TYPE, HW_STATUS, CUSTOMER_CLASS, HOUSE_STATUS, 
+        FIRST_PAYMENT, INET_ROUTER, INET_ADDON, PRODUCT FROM SC_V_CALCULATE WHERE SC_ID = :sc_id AND CALLBACK_ID =:cb_id",
+            params! {"sc_id" => &sc_id, "cb_id" => &cb_id},
         )
         .map(|r| {
             r.map(|x| x.unwrap())
                 .map(|mut row| {  
+                    let x: String = row.take("PRODUCT").unwrap();
                     ScPackages {
+                        customer_id: row.take("CUSTOMER_ID").unwrap(),
                         brand_id: row.take("BRAND").unwrap(),
                         promotion_id: row.take("PROMO_ID").unwrap(),
                         prospect_type: row.take("PROSPECT_TYPE").unwrap(),
@@ -602,7 +593,7 @@ pub fn getCalculate(conn: &mut Conn, customer_id: &i64) -> Result<Option<ScPacka
                         first_payment: row.take("FIRST_PAYMENT").unwrap(),
                         internet_package_router: row.take("INET_ROUTER").unwrap(),
                         internet_package_addon: row.take("INET_ADDON").unwrap(),
-                        package: row.take("PRODUCT").unwrap(),
+                        package: serde_json::from_str(&x).unwrap(),
                     }
             
                 })
@@ -641,12 +632,10 @@ pub fn TrxCalculate(conn: &mut Conn, req: &ScCalculate, callback_id: &i32) -> Re
                                 "estimated_addon" => &req.ESTIMATED_ALACARTE.clone(),
                                 "estimated_promo" => &req.ESTIMATED_PROMO.clone(),
                                 "total_estimated_cost" => &req.TOTAL_ESTIMATED_COSTS.clone(),
-                            })
-                .unwrap();
+                            })?;
             t.commit().is_ok();
             Ok(())
-        })
-        .unwrap();
+        })?;
     Ok(())
 }
 
@@ -676,12 +665,10 @@ pub fn push_ppg(conn: &mut Conn, customer_id: &i64, customer_name: &String, amou
                             "customer_name" => &customer_name,
                             "customer_id" => &customer_id,
                     },
-                )
-                .unwrap();
+                )?;
                 t.commit().is_ok();
                 Ok(())
-            })
-            .unwrap();
+            })?;
             Ok(())
         },
         None => {
@@ -696,12 +683,10 @@ pub fn push_ppg(conn: &mut Conn, customer_id: &i64, customer_name: &String, amou
                         "name" => &customer_name,
                         "amount" => &amount,
                     },
-                )
-                .unwrap();
+                )?;
                 t.commit().is_ok();
                 Ok(())
-            })
-            .unwrap();
+            })?;
             Ok(())
         },
     } 
@@ -741,11 +726,9 @@ pub fn TrxReason(conn: &mut Conn, req: &ScReason) -> Result<(), Error> {
                 "sc_id" => &req.sc_id.clone(),
                 "id" => &req.reason_id.clone(),
                 "descr" => &req.descr.clone(),
-            })
-            .unwrap();
+            })?;
             t.commit().is_ok();
             Ok(())
-        })
-    .unwrap();
+        })?;
     Ok(())
 }
