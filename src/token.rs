@@ -3,7 +3,7 @@ use jwt::{decode, encode, Header, Validation, TokenData};
 use serde::{Deserialize, Serialize};
 use derive_new::new;
 use crate::model::{User, Token};
-use crate::errors::AppError;
+//use crate::errors::AppError;
 use crate::db::{Pool, get_token};
 
 static ONE_WEEK: i64 = 60 * 60 * 24 * 7;

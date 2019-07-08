@@ -1,14 +1,23 @@
-use actix_web::error::{BlockingError, JsonPayloadError};
-use actix_web::{http, HttpResponse, ResponseError};
+use actix_web::error::{BlockingError, ContentTypeError, JsonPayloadError};
+use actix_web::{http, Error, HttpResponse, ResponseError};
+use serde::{Deserialize, Serialize};
+use serde::{de, ser};
 use diesel;
-use mysql;
 use failure::Fail;
 use jwt;
 use log::error;
-use r2d2;
+use mysql;
 use reqwest;
-use serde::Serialize;
+use std::io;
 use validator;
+use std::convert::From;
+use std::fmt::Display;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SCErrorResponse {
+    errors: Vec<String>,
+}
+
 
 #[derive(Debug, Serialize)]
 pub struct ApiError {
@@ -34,6 +43,34 @@ impl ApiError {
 
 #[derive(Fail, Debug)]
 pub enum AppError {
+    /*#[fail(display = "Error in actix, {}", _0)]
+    Actix(Error),
+    #[fail(display = "Request was made with bad Content-Type header")]
+    ContentType,
+    #[fail(display = "Error in diesel, {}", _0)]
+    Diesel(#[cause] diesel::result::Error),
+    #[fail(display = "Error in r2d2, {}", _0)]
+    R2d2(#[cause] r2d2::Error),
+    #[fail(display = "Error IO, {}", _0)]
+    IO(#[cause] io::Error),
+    #[fail(display = "Error mysql, {}", _0)]
+    Mysql(#[cause] mysql::Error),
+    #[fail(display = "Error  mysql row, {}", _0)]
+    MysqlRow(#[cause] mysql::FromRowError),
+    #[fail(display = "Error  mysql value, {}", _0)]
+    MysqlVal(#[cause] mysql::FromValueError),
+    #[fail(display = "Error reqwest, {}", _0)]
+    Reqwest(#[cause] reqwest::Error),
+    #[fail(display = "Failed to log in user")]
+    Login,
+    #[fail(display = "Failed to logout in user")]
+    Logout,
+    #[fail(display = "Must be authorized to perform this action")]
+    Auth,
+    #[fail(display = "Missing required fields")]
+    MissingFields,
+    */
+
     #[fail(display = "internal error")]
     Internal,
     #[fail(display = "bad request")]
@@ -47,7 +84,7 @@ pub enum AppError {
 }
 
 impl ResponseError for AppError {
-    fn render_response(&self) -> HttpResponse {
+    fn error_response(&self) -> HttpResponse {
         match *self {
             AppError::Internal => HttpResponse::new(http::StatusCode::INTERNAL_SERVER_ERROR),
             AppError::BadRequest(ref api_error) => {
@@ -60,6 +97,70 @@ impl ResponseError for AppError {
     }
 }
 
+/*
+impl ResponseError for AppError {
+    fn error_response(&self) -> HttpResponse {
+        match *self {
+            AppError::Actix(ref e) => {
+                HttpResponse::InternalServerError().json(SCErrorResponse {
+                    errors: vec![format!("{}", e)],
+                })
+            }
+            AppError::Diesel(ref e) => {
+                let body = SCErrorResponse {
+                    errors: vec![format!("{}", e)],
+                };
+
+                match *e {
+                    diesel::result::Error::NotFound => HttpResponse::NotFound().json(body),
+                    _ => HttpResponse::InternalServerError().json(body),
+                }
+            }
+            AppError::R2d2(ref e) => {
+                HttpResponse::InternalServerError().json(SCErrorResponse {
+                    errors: vec![format!("{}", e)],
+                })
+            }
+            AppError::Mysql(ref e) => {
+                HttpResponse::InternalServerError().json(SCErrorResponse {
+                    errors: vec![format!("{}", e)],
+                })
+            }
+            AppError::MysqlRow(ref e) => {
+                HttpResponse::InternalServerError().json(SCErrorResponse {
+                    errors: vec![format!("{}", e)],
+                })
+            }
+            AppError::MysqlVal(ref e) => {
+                HttpResponse::InternalServerError().json(SCErrorResponse {
+                    errors: vec![format!("{}", e)],
+                })
+            }
+            AppError::Reqwest(ref e) => {
+                HttpResponse::InternalServerError().json(SCErrorResponse {
+                    errors: vec![format!("{}", e)],
+                })
+            }
+            AppError::IO(ref e) => {
+                HttpResponse::InternalServerError().json(SCErrorResponse {
+                    errors: vec![format!("{}", e)],
+                })
+            }
+            AppError::Auth => HttpResponse::Unauthorized().json(SCErrorResponse {
+                errors: vec![format!("{}", self)],
+            }),
+            AppError::MissingFields
+            | AppError::ContentType
+            | AppError::Login
+            | AppError::Logout => {
+                HttpResponse::BadRequest().json(SCErrorResponse {
+                    errors: vec![format!("{:?}", self)],
+                })
+            }
+        }
+    }
+}
+*/
 impl From<diesel::result::Error> for AppError {
     fn from(error: diesel::result::Error) -> Self {
         error!("ERROR diesel = {:?}", error);
@@ -97,16 +198,38 @@ impl From<BlockingError<AppError>> for AppError {
 }
 
 impl From<r2d2::Error> for AppError {
-    fn from(error: r2d2::Error) -> Self {
-        error!("ERROR r2d2 = {:?}", error);
-        AppError::Internal
+    fn from(e: r2d2::Error) -> Self {
+        error!("ERROR r2d2 = {:?}", e);
+        AppError::BadRequest(ApiError::new(&format!("{}", e)))
     }
 }
 
 impl From<mysql::Error> for AppError {
-    fn from(error: mysql::Error) -> Self {
-        error!("ERROR mysql = {:?}", error);
-        AppError::Internal
+    fn from(e: mysql::Error) -> Self {
+        error!("ERROR mysql = {:?}", e);
+        AppError::BadRequest(ApiError::new(&format!("{}", e)))
+    }
+}
+
+impl From<mysql::FromRowError> for AppError {
+    fn from(e: mysql::FromRowError) -> Self {
+        error!("ERROR mysql row = {:?}", e);
+        AppError::BadRequest(ApiError::new(&format!("{}", e)))
+    }
+}
+
+
+impl From<mysql::FromValueError> for AppError {
+    fn from(e: mysql::FromValueError) -> Self {
+        error!("ERROR mysql value = {:?}", e);
+       AppError::BadRequest(ApiError::new(&format!("{}", e)))
+    }
+}
+
+impl From<serde_json::Error> for AppError {
+    fn from(e: serde_json::Error) -> Self {
+        error!("ERROR serde json value = {:?}", e);
+       AppError::BadRequest(ApiError::new(&format!("{}", e)))
     }
 }
 
@@ -118,9 +241,16 @@ impl From<jwt::errors::Error> for AppError {
 }
 
 impl From<reqwest::Error> for AppError {
-    fn from(error: reqwest::Error) -> Self {
-        error!("ERROR reqwest = {:?}", error);
-        AppError::Internal
+    fn from(e: reqwest::Error) -> Self {
+        error!("ERROR reqwest = {:?}", e);
+        AppError::BadRequest(ApiError::new(&format!("{}", e)))
+    }
+}
+
+impl From<io::Error> for AppError {
+    fn from(e: io::Error) -> Self {
+        error!("ERROR IO = {:?}", e);
+       AppError::BadRequest(ApiError::new(&format!("{}", e)))
     }
 }
 

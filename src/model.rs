@@ -255,6 +255,7 @@ pub struct ScCallback {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScPackages {
+    pub customer_id: i32,
     pub brand_id: i32,
     //note string
     pub promotion_id: i32,
