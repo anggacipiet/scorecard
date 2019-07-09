@@ -195,7 +195,7 @@ pub struct ScCustomer {
     pub email: String,
     pub email_update: Option<String>,
     pub email_update_check: bool,
-    pub foto: String,
+    pub foto: Option<String>,
     pub foto_update: Option<bool>,
     pub foto_update_check: bool,
     //pub created_date: NaiveDateTime,
