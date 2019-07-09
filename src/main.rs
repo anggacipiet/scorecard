@@ -400,8 +400,8 @@ pub fn sc_reason(
         }  
     })
     .then(|res| match res {
-        Ok(edit) => Ok(HttpResponse::Ok().json(json!({
-            "message": "send data customer success".to_string(),
+        Ok(reason) => Ok(HttpResponse::Ok().json(json!({
+            "message": reason,
             "status": true,
             "data": "save reason success",
         }))),

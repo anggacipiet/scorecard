@@ -181,7 +181,6 @@ impl ScClient {
                     "internet_package_addon": oke.internet_package_addon,
                     "package": oke.package
                 });
-                println!("req: {:?}", req);
                 let v: Value = serde_json::from_value(req).unwrap();
                 println!("request: {:?}", v);
                 let o = self.post("/api/Calculation/calculateEstimation", &v);
@@ -193,7 +192,14 @@ impl ScClient {
                         match get_profile(conn, oke.customer_id) {
                             Ok(oke) => {
                                 println!("get name: {:?}", oke[0].customer_name);
-                                match TrxCalculate(conn, &resp, &cb_id) {
+                                match TrxCalculate(
+                                    conn,
+                                    &resp,
+                                    &sc_id,
+                                    &cb_id,
+                                    format!("{}", v).as_str(),
+                                    &ok,
+                                ) {
                                     Ok(_) => {
                                         match push_ppg(
                                             conn,
@@ -202,20 +208,24 @@ impl ScClient {
                                             &resp.TOTAL_ESTIMATED_COSTS,
                                         ) {
                                             Ok(_) => Ok(vec![resp]),
-                                            Err(_) => Err(Error::from(CustomError::new("PPG"))),
+                                            Err(e) => Err(Error::from(CustomError::new(
+                                                format!("{}", e).as_str(),
+                                            ))),
                                         }
                                     }
-                                    Err(e) => Err(Error::from(CustomError::new("TRX CALC"))),
+                                    Err(e) => Err(Error::from(CustomError::new(
+                                        format!("{}", e).as_str(),
+                                    ))),
                                 }
                             }
-                            Err(e) => Err(Error::from(CustomError::new("GET PROFILES"))),
+                            Err(e) => Err(Error::from(CustomError::new(format!("{}", e).as_str()))),
                         }
                     }
-                    Err(_) => Err(Error::from(CustomError::new("RESPONSE VALSYS"))),
+                    Err(e) => Err(Error::from(CustomError::new(format!("{}", e).as_str()))),
                 }
             }
             Ok(None) => Ok(serde_json::from_value(json!(vec![{}])).unwrap()),
-            Err(_) => Err(Error::from(CustomError::new("BUILD REQUEST"))),
+            Err(e) => Err(Error::from(CustomError::new(format!("{}", e).as_str()))),
         }
     }
 }

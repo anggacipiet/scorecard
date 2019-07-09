@@ -581,7 +581,6 @@ pub fn getCalculate(conn: &mut Conn, sc_id: &i32, cb_id: &i32) -> Result<Option<
         .map(|r| {
             r.map(|x| x.unwrap())
                 .map(|mut row| {  
-                    let x: String = row.take("PRODUCT").unwrap();
                     ScPackages {
                         customer_id: row.take("CUSTOMER_ID").unwrap(),
                         brand_id: row.take("BRAND").unwrap(),
@@ -593,7 +592,7 @@ pub fn getCalculate(conn: &mut Conn, sc_id: &i32, cb_id: &i32) -> Result<Option<
                         first_payment: row.take("FIRST_PAYMENT").unwrap(),
                         internet_package_router: row.take("INET_ROUTER").unwrap(),
                         internet_package_addon: row.take("INET_ADDON").unwrap(),
-                        package: serde_json::from_str(&x).unwrap(),
+                        package: row.take("PRODUCT").unwrap(),
                     }
             
                 })
@@ -606,20 +605,21 @@ pub fn getCalculate(conn: &mut Conn, sc_id: &i32, cb_id: &i32) -> Result<Option<
     }
 }
 
-pub fn TrxCalculate(conn: &mut Conn, req: &ScCalculate, callback_id: &i32) -> Result<(), Error> {
+pub fn TrxCalculate(conn: &mut Conn, req: &ScCalculate, &sc_id: &i32, callback_id: &i32, request: &str, resp: &str) -> Result<(), Error> {
     let _ = conn
         .start_transaction(false, None, None)
         .and_then(|mut t| {
             t.prep_exec("INSERT INTO SC_CALCULATE
-                                (CALLBACK_ID, COST_BASIC, COST_ADDON, COST_INET_ADDON, COST_INET_ROUTER,
+                                (CALLBACK_ID, SC_ID, COST_BASIC, COST_ADDON, COST_INET_ADDON, COST_INET_ROUTER,
                                  COST_HD_CHARGE, BP_CHARGE, DEC_HD_CHARGE, ESTIMATED_iNSTALLATION,
-                                 ESTIMATED_PACKAGE, ESTIMATED_ADDON, ESTIMATED_PROMO,TOTAL_ESTIMATED_COST)
+                                 ESTIMATED_PACKAGE, ESTIMATED_ADDON, ESTIMATED_PROMO, TOTAL_ESTIMATED_COST, REQUEST, RESPONSE)
                             VALUES
-                                (:callback_id, :cost_basic, :cost_addon, :cost_inet_addon, :cost_inet_router,
+                                (:callback_id, :sc_id, :cost_basic, :cost_addon, :cost_inet_addon, :cost_inet_router,
                                  :cost_hd_charge, :bp_charge, :dec_hd_charge, :estimated_installation,
-                                 :estimated_package, :estimated_addon, :estimated_promo, :total_estimated_cost)",
+                                 :estimated_package, :estimated_addon, :estimated_promo, :total_estimated_cost, :request, :resp)",
                             params!{
                                 "callback_id" => &callback_id,
+                                "sc_id" => &sc_id,
                                 "cost_basic" => &req.COST_PACKAGE.clone(),
                                 "cost_addon" => &req.COST_ALACARTE.clone(),
                                 "cost_inet_addon" => &req.COST_INTERNET_ADDON.clone(),
@@ -632,6 +632,9 @@ pub fn TrxCalculate(conn: &mut Conn, req: &ScCalculate, callback_id: &i32) -> Re
                                 "estimated_addon" => &req.ESTIMATED_ALACARTE.clone(),
                                 "estimated_promo" => &req.ESTIMATED_PROMO.clone(),
                                 "total_estimated_cost" => &req.TOTAL_ESTIMATED_COSTS.clone(),
+                                "request" => &request,
+                                "resp" => &resp,
+                               
                             })?;
             t.commit().is_ok();
             Ok(())
@@ -659,7 +662,7 @@ pub fn push_ppg(conn: &mut Conn, customer_id: &i64, customer_name: &String, amou
             .start_transaction(false, None, None)
             .and_then(|mut t| {
                 t.prep_exec(
-                    "UPDATE valsys_prod.CUST_INQUIRY  SET AMMOUNT = :amount, NMPEL = :customer_name WHERE CUST_NEW=:customer_id",
+                    "UPDATE valsys_prod.CUST_INQUIRY  SET AMMOUNT = :amount, NMPEL = :customer_name, SYNC_DATE = NULL WHERE CUST_NEW=:customer_id",
                     params! {
                             "amount" => &amount,
                             "customer_name" => &customer_name,
