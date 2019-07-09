@@ -265,8 +265,8 @@ pub struct ScPackages {
     pub customer_class: i32,
     pub house_status: i32,
     pub first_payment: i32,
-    pub internet_package_router: i32,
-    pub internet_package_addon: i32,
+    pub internet_package_router: Option<i32>,
+    pub internet_package_addon: Option<i32>,
     //pub package: Vec<Box<ScBasic>>,
     //pub package: HashMap<String, Value>,
     pub package: Value,
@@ -312,9 +312,9 @@ pub struct ScCalculate {
     pub DECODER_HD_CHARGE: i32,
     pub COST_HD_CHARGE: i32,
     pub TOTAL_ESTIMATED_COSTS: i64,
-    pub DETAIL_BASIC_PACKAGE: Option<Vec<Value>>,
+    //pub DETAIL_BASIC_PACKAGE: Option<Value>,
     //pub DETAIL_ALACARTE: Option<Vec<Value>>,
-    pub DETAIL_INTERNET_ADDON: Option<Vec<Value>>,
+    //pub DETAIL_INTERNET_ADDON: Option<Value>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
