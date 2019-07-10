@@ -378,12 +378,13 @@ pub fn sc_edited(
 pub fn sc_reason(
     req: web::Json<model::Request>,
     db: web::Data<db::Pool>,
-    sfa: web::Data<db::SFA>,
+    //db_sfa: web::Data<db::SFA>,
+    db_sfa: web::Data<AppState>
 ) -> impl Future<Item = HttpResponse, Error = AppError> {
     web::block(move || {
         let mut conn = db.get().unwrap();
-        let mut conn_sfa = sfa.get().unwrap();
-         println!("conn: {:?} sfa: {:?}", conn, conn_sfa);
+        let mut conn_sfa = db_sfa.sfa.get().unwrap();
+        println!("sfa {:?}", conn_sfa);
         let data = req.data.get();
         let result = serde_json::from_str::<model::ScReason>(&data).unwrap();
         println!("data: {:?} request: {:?}", data, result);
@@ -391,7 +392,7 @@ pub fn sc_reason(
             Ok(_) => {
                 match db::TrxReason(&mut conn, &result) {
                     Ok(_) => {
-                        match ScClient::Calculate(&mut ScClient::default(), &mut conn, &mut conn_sfa, &result.sc_id, &result.id) {
+                        match ScClient::Calculate(&mut ScClient::default(), &mut conn_sfa, &mut conn, &result.sc_id, &result.id) {
                             Ok(ok) => Ok(ok),
                             Err(e) => Err(e),
                         }
@@ -632,9 +633,9 @@ pub fn sc_upload(id: web::Path<String>, multipart: Multipart, db: web::Data<db::
         })
 }
 
-// pub struct AppState {
-//     pub db: Addr<db::DbExecutor>
-// }
+pub struct AppState {
+    pub sfa: db::SFA,
+}
 
 fn main() -> std::io::Result<()> {
     // Grab the env vars.
@@ -647,10 +648,10 @@ fn main() -> std::io::Result<()> {
     //let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let database_url = dotenv!("DATABASE_URL");
     let db_sfa = dotenv!("DATABASE_SFA");
-    println!("db_sfa: {:?}", db_sfa);
+    //println!("db_sfa: {:?}", db_sfa);
     let pool = db::init_pool(&database_url);
     let sfa = db::init_sfa(&db_sfa);
-    println!("sfa: {:?}", sfa);
+    //println!("sfa: {:?}", sfa);
     //let csrf_token_header = header::HeaderName::from_lowercase(b"x-csrf-token").unwrap();
 
     // let addr: Addr<DbExecutor> = SyncArbiter::start(4, move|| db::DbExecutor(pool.clone()));
@@ -658,7 +659,10 @@ fn main() -> std::io::Result<()> {
         // App::with_state(AppState{db: addr.clone()})
         App::new()
             .data(pool.clone())
-            .data(sfa.clone())
+            //.data(sfa.clone())
+            .data(AppState {
+                sfa: sfa.clone(),
+            })
             /*.data(
                 CsrfTokenGenerator::new(
                     dotenv!("CSRF_TOKEN_KEY").as_bytes().to_vec(),
