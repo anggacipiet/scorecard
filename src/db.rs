@@ -13,6 +13,9 @@ use std::collections::HashMap;
 
 pub type Conn = r2d2::PooledConnection<MysqlConnectionManager>;
 pub type Pool = r2d2::Pool<MysqlConnectionManager>;
+pub type ConnSFA = r2d2::PooledConnection<MysqlConnectionManager>;
+pub type SFA  = r2d2::Pool<MysqlConnectionManager>;
+
 
 pub fn init_pool(db_url: &str) -> Pool {
     let opts = Opts::from_url(db_url).unwrap();
@@ -22,6 +25,17 @@ pub fn init_pool(db_url: &str) -> Pool {
         .max_size(15)
         .min_idle(Some(0))
         .build(manager)
+        .unwrap()
+}
+
+pub fn init_sfa(db_url: &str) -> SFA {
+    let opts_ = Opts::from_url(db_url).unwrap();
+    let builder_ = OptsBuilder::from_opts(opts_);
+    let manager_ = MysqlConnectionManager::new(builder_);
+    r2d2::Pool::builder()
+        .max_size(15)
+        .min_idle(Some(0))
+        .build(manager_)
         .unwrap()
 }
 
@@ -730,6 +744,25 @@ pub fn TrxReason(conn: &mut Conn, req: &ScReason) -> Result<(), Error> {
                 "id" => &req.reason_id.clone(),
                 "descr" => &req.descr.clone(),
             })?;
+            t.commit().is_ok();
+            Ok(())
+        })?;
+    Ok(())
+}
+
+pub fn TrxUpdTrex(sfa: &mut ConnSFA, customer_id: &i32, resp: &ScCalculate) -> Result<(), Error> {
+    let _ = sfa
+        .start_transaction(false, None, None)
+        .and_then(|mut t| {
+            t.prep_exec(
+                "UPDATE t_products SET commercial_product_id = :product_id, product_name = :product_name
+                WHERE customer_id = :customer_id and segment =1",
+                params! {
+                        "product_id" => &resp.DETAIL_BASIC_PACKAGE[0]["basic_id"],
+                        "product_name" => &resp.DETAIL_BASIC_PACKAGE[0]["basic_name"],
+                        "customer_id" => &customer_id,
+                },
+            )?;
             t.commit().is_ok();
             Ok(())
         })?;
