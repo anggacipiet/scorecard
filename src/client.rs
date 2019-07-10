@@ -10,7 +10,7 @@ use reqwest::{
 use serde::de::Deserialize;
 use serde_json::{json, map::Map, Value};
 
-use crate::db::{getCalculate, get_profile, push_ppg, Conn, TrxCalculate};
+use crate::db::{getCalculate, get_profile, push_ppg, Conn, ConnSFA, TrxCalculate, TrxUpdTrex};
 use crate::errors::AppError;
 use crate::failures::CustomError;
 use std::borrow::Cow;
@@ -106,6 +106,7 @@ impl ScClient {
     pub fn Calculate(
         &mut self,
         conn: &mut Conn,
+        sfa: &mut ConnSFA,
         sc_id: &i32,
         cb_id: &i32,
     ) -> Result<Vec<ScCalculate>, Error> {
@@ -190,8 +191,8 @@ impl ScClient {
                         let resp = serde_json::from_str::<ScCalculate>(&ok).unwrap();
                         println!("bind: {:?}", resp);
                         match get_profile(conn, oke.customer_id) {
-                            Ok(oke) => {
-                                println!("get name: {:?}", oke[0].customer_name);
+                            Ok(ooo) => {
+                                println!("get name: {:?}", ooo[0].customer_name);
                                 match TrxCalculate(
                                     conn,
                                     &resp,
@@ -203,11 +204,19 @@ impl ScClient {
                                     Ok(_) => {
                                         match push_ppg(
                                             conn,
-                                            &oke[0].customer_id,
-                                            &oke[0].customer_name.to_uppercase(),
+                                            &ooo[0].customer_id,
+                                            &ooo[0].customer_name.to_uppercase(),
                                             &resp.TOTAL_ESTIMATED_COSTS,
                                         ) {
-                                            Ok(_) => Ok(vec![resp]),
+                                            Ok(_) => {
+                                                /*match TrxUpdTrex(sfa, &oke.customer_id, &resp) {
+                                                    Ok(_) => Ok(vec![resp]),
+                                                    Err(e) => Err(Error::from(CustomError::new(
+                                                        format!("{}", e).as_str(),
+                                                    ))),
+                                                }*/
+                                                Ok(vec![resp])
+                                            }
                                             Err(e) => Err(Error::from(CustomError::new(
                                                 format!("{}", e).as_str(),
                                             ))),

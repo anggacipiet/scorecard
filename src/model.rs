@@ -195,7 +195,7 @@ pub struct ScCustomer {
     pub email: String,
     pub email_update: Option<String>,
     pub email_update_check: bool,
-    pub foto: String,
+    pub foto: Option<String>,
     pub foto_update: Option<bool>,
     pub foto_update_check: bool,
     //pub created_date: NaiveDateTime,
@@ -312,7 +312,7 @@ pub struct ScCalculate {
     pub DECODER_HD_CHARGE: i32,
     pub COST_HD_CHARGE: i32,
     pub TOTAL_ESTIMATED_COSTS: i64,
-    //pub DETAIL_BASIC_PACKAGE: Option<Value>,
+    pub DETAIL_BASIC_PACKAGE: Vec<Value>,
     //pub DETAIL_ALACARTE: Option<Vec<Value>>,
     //pub DETAIL_INTERNET_ADDON: Option<Value>,
 }
