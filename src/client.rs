@@ -105,69 +105,12 @@ impl ScClient {
 
     pub fn Calculate(
         &mut self,
-        conn: &mut Conn,
         sfa: &mut ConnSFA,
+        conn: &mut Conn,
         sc_id: &i32,
         cb_id: &i32,
     ) -> Result<Vec<ScCalculate>, Error> {
-        /*
-        let req = r#"
-        {
-            "brand_id": 1,
-            "promotion_id": "257",
-            "prospect_type": 104,
-            "hardware_status": "3",
-            "customer_class": 1,
-            "house_status": 1,
-            "first_payment": 0,
-            "internet_package_router": 199,
-            "internet_package_addon": 243,
-            "package": [{
-                "billing_freq": "2",
-                "billing_freq_qty": "3",
-                "package": 1,
-                "package_type": "basic",
-                "product_id": "26",
-                "product_name": "Venus",
-                "hardware_product_id": 1,
-                "hardware_charge": null,
-                "list_addon": [
-                {
-                    "billing_freq": "2",
-                    "billing_freq_qty": "3",
-                    "package": 1,
-                    "package_type": "addon",
-                    "product_id": "21",
-                    "product_name": "Cinema 3"
-                },
-                {
-                    "billing_freq": "2",
-                    "billing_freq_qty": "3",
-                    "package": 1,
-                    "package_type": "addon",
-                    "product_id": "247",
-                    "product_name": "Besmart"
-                }]
-            }]
-        }"#;
-        let v: Value = serde_json::from_str(req)?;
-        info!("request: {:?}", v);
-        //RESPONSE BY EMAIL
-        //{ "ESTIMATED_INSTALLATION": "200000", "ESTIMATED_COST_PACKAGE": 2158800, "COST_PACKAGE": 2158800,
-        //"ESTIMATED_ALACARTE": 1440000, "COST_ALACARTE": 1440000, "COST_INTERNET_ADDON": 2877600,
-        // "COST_INTERNET_ROUTER": 0, "ESTIMATED_PROMO": 200000, "BELI_PUTUS_CHARGE": 0,
-        //"DECODER_HD_CHARGE": 0, "COST_HD_CHARGE": 0, "TOTAL_ESTIMATED_COSTS": 6476400 }
-        let o = self.post("/api/Calculation/calculateEstimation", &v);
-        println!("response: {:?}", o);
-        match o {
-            Ok(ok) => {
-                let resp = serde_json::from_str::<ScCalculate>(&ok).unwrap();
-                println!("bind: {:?}", resp);
-                Ok(resp)
-            },
-            Err(_) => Err(Error::from(CustomError::new("")))
-        }
-        */
+
         match getCalculate(conn, &sc_id, &cb_id) {
             Ok(Some(oke)) => {
                 let req = json!({
@@ -209,13 +152,14 @@ impl ScClient {
                                             &resp.TOTAL_ESTIMATED_COSTS,
                                         ) {
                                             Ok(_) => {
-                                                /*match TrxUpdTrex(sfa, &oke.customer_id, &resp) {
+                                                // bugfix point 4 update product ke trex 
+                                                match TrxUpdTrex(sfa, &oke.customer_id, &resp) {
                                                     Ok(_) => Ok(vec![resp]),
                                                     Err(e) => Err(Error::from(CustomError::new(
                                                         format!("{}", e).as_str(),
                                                     ))),
-                                                }*/
-                                                Ok(vec![resp])
+                                                }
+                                                //Ok(vec![resp])
                                             }
                                             Err(e) => Err(Error::from(CustomError::new(
                                                 format!("{}", e).as_str(),
@@ -233,7 +177,8 @@ impl ScClient {
                     Err(e) => Err(Error::from(CustomError::new(format!("{}", e).as_str()))),
                 }
             }
-            Ok(None) => Ok(serde_json::from_value(json!(vec![{}])).unwrap()),
+            // bugfix point 1 result reject tidak setuju struct default resp calculation
+            Ok(None) => Ok(vec![ScCalculate::default()]), 
             Err(e) => Err(Error::from(CustomError::new(format!("{}", e).as_str()))),
         }
     }

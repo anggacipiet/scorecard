@@ -298,7 +298,7 @@ pub struct ScAddon {
     pub product_name: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct ScCalculate {
     pub ESTIMATED_INSTALLATION: String,
     pub ESTIMATED_COST_PACKAGE: i32,

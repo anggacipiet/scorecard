@@ -28,8 +28,8 @@ pub fn init_pool(db_url: &str) -> Pool {
         .unwrap()
 }
 
-pub fn init_sfa(db_url: &str) -> SFA {
-    let opts_ = Opts::from_url(db_url).unwrap();
+pub fn init_sfa(url: &str) -> SFA {
+    let opts_ = Opts::from_url(url).unwrap();
     let builder_ = OptsBuilder::from_opts(opts_);
     let manager_ = MysqlConnectionManager::new(builder_);
     r2d2::Pool::builder()
@@ -756,7 +756,7 @@ pub fn TrxUpdTrex(sfa: &mut ConnSFA, customer_id: &i32, resp: &ScCalculate) -> R
         .and_then(|mut t| {
             t.prep_exec(
                 "UPDATE t_products SET commercial_product_id = :product_id, product_name = :product_name
-                WHERE customer_id = :customer_id and segment =1",
+                WHERE customer_id = :customer_id and segment =1 and product_type='TV Base Package'",
                 params! {
                         "product_id" => &resp.DETAIL_BASIC_PACKAGE[0]["basic_id"],
                         "product_name" => &resp.DETAIL_BASIC_PACKAGE[0]["basic_name"],
