@@ -368,11 +368,10 @@ pub fn TrxResult(conn: &mut Conn, req: &ScResult) -> Result<(), Error> {
 
 pub fn getCallback(conn: &mut Conn, customer_id: &i64, tb_id: &i32, tdb_id: &i32, td_id: &i32, elc_id: &i32,) -> Result<Vec<ScCallback>, Error> {
     let call = conn.prep_exec("
-        SELECT A.CALLBACK_ID, A.SC_ID, A.CUSTOMER_ID, A.SCORE, A.SEC, A.PRODUCT_ID, A.PRODUCT_NAME,
-        A.PROMO_ID, A.PROMO_CODE, A.PROMO_DESCR, A.BILL_FREQ, A.REASON
-        FROM SC_V_VALUE A JOIN SC_RESULT_NEW B
-        ON A.CUSTOMER_ID = B.CUSTOMER_ID AND A.SC_ID = B.SC_ID
-        WHERE A.CUSTOMER_ID = :id AND B.TB_ID = :tb_id AND B.TDB_ID = :tdb_id AND B.TD_ID = :td_id AND B.EC_ID = :ec_id ",
+        SELECT CALLBACK_ID, SC_ID, CUSTOMER_ID, SCORE, SEC, PRODUCT_ID, PRODUCT_NAME,
+        PROMO_ID, PROMO_CODE, PROMO_DESCR, BILL_FREQ, REASON
+        FROM SC_V_CALLBACK
+        WHERE CUSTOMER_ID = :id AND TB_ID = :tb_id AND TDB_ID = :tdb_id AND TD_ID = :td_id AND EC_ID = :ec_id ",
         params!{
             "id" => &customer_id,
             "tb_id" => &tb_id,
