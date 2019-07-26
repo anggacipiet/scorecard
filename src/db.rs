@@ -251,7 +251,7 @@ pub fn get_elc(conn: &mut Conn, tb_id: i32, tdb_id: i32) -> Result<Vec<ScELC>, E
 pub fn get_list(conn: &mut Conn, id: i32) -> Result<Vec<ScWorkorder>, Error> {
     let sc_wo = conn.prep_exec(
             "SELECT WO_ID, CUSTOMER_ID, PROSPECT_NBR, ASSIGN_TO, SERVICES_ID, SERVICES_DESCR, SERVICES_CATEGORY, 
-            DESCR, SCHEDULE_DATE, REGION, LATITUDE, LONGITUDE, CREATED_DATE, STATUS, STATUS_DESCR 
+            DESCR, SCHEDULE_DATE, REGION, LATITUDE, LONGITUDE, CREATED_DATE, STATUS, STATUS_DESCR, PACKAGES 
             FROM SC_V_WORKORDER WHERE ASSIGN_TO = :id ORDER BY CREATED_DATE DESC",
             params! {"id" => id},
         )
@@ -275,6 +275,7 @@ pub fn get_list(conn: &mut Conn, id: i32) -> Result<Vec<ScWorkorder>, Error> {
                         created_date: row.take("CREATED_DATE").unwrap(),
                         status: row.take("STATUS").unwrap(),
                         status_descr: row.take("STATUS_DESCR").unwrap(),
+                        packages: row.take("PACKAGES").unwrap(),
                     }
                 })
                 .collect()

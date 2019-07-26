@@ -160,6 +160,7 @@ pub struct ScWorkorder {
     pub created_date: NaiveDateTime,
     pub status: i32,
     pub status_descr: String,
+    pub packages : Option<Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
