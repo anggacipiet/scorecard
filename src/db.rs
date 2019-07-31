@@ -348,10 +348,11 @@ pub fn TrxResult(conn: &mut Conn, req: &ScResult) -> Result<(), Error> {
         .start_transaction(false, None, None)
         .and_then(|mut t| {
             t.prep_exec("INSERT INTO SC_RESULT_NEW
-                                (CUSTOMER_ID, TB_ID, TDB_ID, TD_ID, EC_ID, EMPLOYEE_ID, LATITUDE, LONGITUDE, CREATED_DATE)
+                                (WO_ID, CUSTOMER_ID, TB_ID, TDB_ID, TD_ID, EC_ID, EMPLOYEE_ID, LATITUDE, LONGITUDE, CREATED_DATE)
                             VALUES
-                                (:customer_id, :tb_id, :tdb_id, :td_id, :ec_id, :employee_id, :latitude, :longitude, NOW())",
+                                (:wo_id, :customer_id, :tb_id, :tdb_id, :td_id, :ec_id, :employee_id, :latitude, :longitude, NOW())",
                             params!{
+                                "wo_id" => &req.wo_id.clone(),
                                 "customer_id" => &req.customer_id.clone(),
                                 "tb_id" => &req.tb_id.clone(),
                                 "tdb_id" => &req.tdb_id.clone(),

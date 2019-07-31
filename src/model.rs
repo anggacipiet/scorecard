@@ -218,6 +218,7 @@ pub struct ScDetail {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScResult {
+    pub wo_id : i64,
     pub customer_id: i64,
     pub tb_id: i32,
     pub tdb_id: i32,
