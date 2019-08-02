@@ -41,70 +41,70 @@ pub fn init_sfa(url: &str) -> SFA {
 
 pub fn TrxLogs(conn: &mut Conn, req: &Request) -> Result<(), Error> {
     let _ = conn
-                .start_transaction(false, None, None)
-                .and_then(|mut t| {
-                t.prep_exec("INSERT INTO SC_APP_ACCESS_LOG
-                                        (EMPLOYEE_ID, NIK, USER_LOGIN, EMPLOYEE_NAME, APPLICATION_ID, 
-                                        APPLICATION_NAME, VERSION_CODE, VERSION_NAME, OS,
-                                        DEVICES, IMEI, IP_ADDRESS, DB_VERSION, DB_NAME, LATLNG, TIME_LNG,
-                                        DATA, PROCESS)
-                                VALUES
-                                        (:employee_id, :nik, :user_login, :employee_name, :application_id,
-                                        :application_name, :version_code, :version_name, :os,
-                                        :devices, :imei, :ip_address, :db_ver, :db_name, :latlng, :timelng,
-                                        :data, :process)",
-                                params!{
-                                        "employee_id" => &req.user.employee_id.clone(),
-                                        "nik" => &req.user.nik.clone(),
-                                        "user_login" => &req.user.user_login.clone(),
-                                        "employee_name" => &req.user.employee_name.clone(),
-                                        "application_id" => &req.application.application_id.clone(),
-                                        "application_name" => &req.application.application_name.clone(),
-                                        "version_code" => &req.application.version_code.clone(),
-                                        "version_name" => &req.application.version_name.clone(),
-                                        "os" => &req.application.os.clone(),
-                                        "devices" => &req.application.device_name.clone(),
-                                        "imei" => &req.application.imei.clone(),
-                                        "ip_address" => &req.application.ip_address.clone(),
-                                        "db_ver" => &req.application.database_version.clone(),
-                                        "db_name" => &req.application.database_name.clone(),
-                                        "latlng" => &req.user.latlng.clone(),
-                                        "timelng" => &req.user.date_latlng.clone(),
-                                        "data" =>  &req.data.get(),
-                                        "process" => &req.action_package.clone(),
-                                })?;
-                        t.commit().is_ok();
-                Ok(())
+        .start_transaction(false, None, None)
+        .and_then(|mut t| {
+        t.prep_exec("INSERT INTO SC_APP_ACCESS_LOG
+                    (EMPLOYEE_ID, NIK, USER_LOGIN, EMPLOYEE_NAME, APPLICATION_ID, 
+                    APPLICATION_NAME, VERSION_CODE, VERSION_NAME, OS,
+                    DEVICES, IMEI, IP_ADDRESS, DB_VERSION, DB_NAME, LATLNG, TIME_LNG,
+                    DATA, PROCESS)
+                    VALUES
+                    (:employee_id, :nik, :user_login, :employee_name, :application_id,
+                    :application_name, :version_code, :version_name, :os,
+                    :devices, :imei, :ip_address, :db_ver, :db_name, :latlng, :timelng,
+                    :data, :process)",
+                params!{
+                    "employee_id" => &req.user.employee_id.clone(),
+                    "nik" => &req.user.nik.clone(),
+                    "user_login" => &req.user.user_login.clone(),
+                    "employee_name" => &req.user.employee_name.clone(),
+                    "application_id" => &req.application.application_id.clone(),
+                    "application_name" => &req.application.application_name.clone(),
+                    "version_code" => &req.application.version_code.clone(),
+                    "version_name" => &req.application.version_name.clone(),
+                    "os" => &req.application.os.clone(),
+                    "devices" => &req.application.device_name.clone(),
+                    "imei" => &req.application.imei.clone(),
+                    "ip_address" => &req.application.ip_address.clone(),
+                    "db_ver" => &req.application.database_version.clone(),
+                    "db_name" => &req.application.database_name.clone(),
+                    "latlng" => &req.user.latlng.clone(),
+                    "timelng" => &req.user.date_latlng.clone(),
+                    "data" =>  &req.data.get(),
+                    "process" => &req.action_package.clone(),
                 })?;
+                t.commit().is_ok();
+            Ok(())
+        })?;
     Ok(())
 }
 
 pub fn get_login(conn: &mut Conn, username: &str, password: &str) -> Result<Option<User>, Error> {
     let oke = conn.prep_exec("select employee_id, user_name, password, nik, sfl_code,
-            full_name, email,  user_type, role_name, brand, branch, region_name,
-            application_id, avatar, null as token 
-            from V_SC_USER_LOGIN where user_name=:username and password=:pass limit 1",
-            params! {"username" => &username, "pass" => &password},)
-                .map(|r| r.map(|x| x.unwrap())
-                    .map(|mut row| {
-                        User{
-                            employee_id: row.take("employee_id").unwrap(),
-                            username: row.take("user_name").unwrap(),
-                            password: row.take("password").unwrap(),
-                            nik: row.take("nik").unwrap(),
-                            sfl_code: row.take("sfl_code").unwrap(),
-                            employee_name: row.take("full_name").unwrap(),
-                            email: row.take("email").unwrap(),
-                            user_type: row.take("user_type").unwrap(),
-                            role_name: row.take("role_name").unwrap(),
-                            brand_code: row.take("brand").unwrap(),
-                            branch_name: row.take("branch").unwrap(), 
-                            region_name: row.take("region_name").unwrap(),
-                            application_id: row.take("application_id").unwrap(),
-                            avatar: row.take("avatar").unwrap(),
-                            token: row.take("token").unwrap(),
-                        }
-                    }).into_iter().next())?;
+        full_name, email,  user_type, role_name, brand, branch, region_name,
+        application_id, avatar, null as token 
+        from V_SC_USER_LOGIN where user_name=:username and password=:pass limit 1",
+        params! {"username" => &username, "pass" => &password},)
+            .map(|r| r.map(|x| x.unwrap())
+                .map(|mut row| {
+                    User{
+                        employee_id: row.take("employee_id").unwrap(),
+                        username: row.take("user_name").unwrap(),
+                        password: row.take("password").unwrap(),
+                        nik: row.take("nik").unwrap(),
+                        sfl_code: row.take("sfl_code").unwrap(),
+                        employee_name: row.take("full_name").unwrap(),
+                        email: row.take("email").unwrap(),
+                        user_type: row.take("user_type").unwrap(),
+                        role_name: row.take("role_name").unwrap(),
+                        brand_code: row.take("brand").unwrap(),
+                        branch_name: row.take("branch").unwrap(), 
+                        region_name: row.take("region_name").unwrap(),
+                        application_id: row.take("application_id").unwrap(),
+                        avatar: row.take("avatar").unwrap(),
+                        token: row.take("token").unwrap(),
+                    }
+                }).into_iter().next())?;
     match oke {
         Some(u) => Ok(Some(u)),
         _ => return Ok(None),
@@ -116,13 +116,13 @@ pub fn TrxToken(conn: &mut Conn, employee_id: &i32, token: &str) -> Result<(), E
         .start_transaction(false, None, None)
         .and_then(|mut t| {
             t.prep_exec(
-                "INSERT INTO SC_TOKEN
-                                (EMPLOYEE_ID, TOKEN, LAST_LOGIN)
-                                VALUES
-                                (:employee_id, :token, NOW())",
+                    "INSERT INTO SC_TOKEN
+                    (EMPLOYEE_ID, TOKEN, LAST_LOGIN)
+                    VALUES
+                    (:employee_id, :token, NOW())",
                 params! {
-                        "employee_id" => &employee_id,
-                        "token" => &token,
+                    "employee_id" => &employee_id,
+                    "token" => &token,
                 },
             )?;
             t.commit().is_ok();
@@ -138,7 +138,7 @@ pub fn TrxLogout(conn: &mut Conn, employee_id: &i32) -> Result<(), Error> {
             t.prep_exec(
                 "UPDATE SC_TOKEN SET LAST_LOGOUT = NOW() WHERE EMPLOYEE_ID = :employee_id and LAST_LOGOUT IS NULL",
                 params! {
-                        "employee_id" => &employee_id,
+                    "employee_id" => &employee_id,
                 },
             )?;
             t.commit().is_ok();
@@ -348,20 +348,20 @@ pub fn TrxResult(conn: &mut Conn, req: &ScResult) -> Result<(), Error> {
         .start_transaction(false, None, None)
         .and_then(|mut t| {
             t.prep_exec("INSERT INTO SC_RESULT_NEW
-                                (WO_ID, CUSTOMER_ID, TB_ID, TDB_ID, TD_ID, EC_ID, EMPLOYEE_ID, LATITUDE, LONGITUDE, CREATED_DATE)
-                            VALUES
-                                (:wo_id, :customer_id, :tb_id, :tdb_id, :td_id, :ec_id, :employee_id, :latitude, :longitude, NOW())",
-                            params!{
-                                "wo_id" => &req.wo_id.clone(),
-                                "customer_id" => &req.customer_id.clone(),
-                                "tb_id" => &req.tb_id.clone(),
-                                "tdb_id" => &req.tdb_id.clone(),
-                                "td_id" => &req.td_id.clone(),
-                                "ec_id" => &req.ec_id.clone(),
-                                "employee_id" => &req.employee_id.clone(),
-                                "latitude" => &req.latitude.clone(),
-                                "longitude" => &req.longitude.clone(),
-                            })?;
+                    (WO_ID, CUSTOMER_ID, TB_ID, TDB_ID, TD_ID, EC_ID, EMPLOYEE_ID, LATITUDE, LONGITUDE, CREATED_DATE)
+                VALUES
+                    (:wo_id, :customer_id, :tb_id, :tdb_id, :td_id, :ec_id, :employee_id, :latitude, :longitude, NOW())",
+                params!{
+                    "wo_id" => &req.wo_id.clone(),
+                    "customer_id" => &req.customer_id.clone(),
+                    "tb_id" => &req.tb_id.clone(),
+                    "tdb_id" => &req.tdb_id.clone(),
+                    "td_id" => &req.td_id.clone(),
+                    "ec_id" => &req.ec_id.clone(),
+                    "employee_id" => &req.employee_id.clone(),
+                    "latitude" => &req.latitude.clone(),
+                    "longitude" => &req.longitude.clone(),
+                })?;
             t.commit().is_ok();
             Ok(())
         })?;
@@ -418,16 +418,9 @@ pub fn getSimulation(
 ) -> Result<Vec<ScCallback>, Error> {
     let sim = conn
         .prep_exec(
-            "
-        SELECT 0 AS CALLBACK_ID, 0 AS SC_ID, D.CUSTOMER_ID, B.SCORE, B.SEC, A.PROD_TS AS PRODUCT_ID, 
-        E.PRODUCT_NAME, E.PROMO_ID, E.PROMO_CODE, E.PROMO_DESCR, E.BILL_FREQ, '' AS REASON
-        FROM SC_MATRIX A 
-        JOIN SC_SCORE B ON A.SCORE = B.SCORE JOIN SC_WORKORDER C
-        ON A.REGION = C.REGION JOIN SC_CUSTOMER D
-        ON A.PROD_SLS = D.PRODUCT_ID AND A.BF_PROD_SLS = D.BF
-        JOIN SC_MAPPING_PRODUCT E
-        ON A.PROD_TS = E.PRODUCT_ID AND A.BF_PROD_TS = E.BILL_FREQ WHERE C.CUSTOMER_ID = :id
-        AND B.TB_ID = :tb_id AND B.TDB_ID = :tdb_id AND B.TD_ID = :td_id AND B.EC_ID = :ec_id ",
+            "SELECT CALLBACK_ID, SC_ID, CUSTOMER_ID, SCORE, SEC, PRODUCT_ID, PRODUCT_NAME,
+            PROMO_ID, PROMO_CODE, PROMO_DESCR, BILL_FREQ, REASON
+            FROM SC_V_SIMULATION WHERE CUSTOMER_ID = :id AND TB_ID = :tb_id AND TDB_ID = :tdb_id AND TD_ID = :td_id AND EC_ID = :ec_id ",
             params! {
                 "id" => &customer_id,
                 "tb_id" => &tb_id,
@@ -461,99 +454,76 @@ pub fn getSimulation(
     }
 }
 
-/*
-pub fn TrxDetail(conn: &mut Conn, req: &ScDetail, opts: Option<i32>) -> Result<(), Error> {
-    if let Some(o) = Some(opts) {
-        if let Some(1) = o {
-            let _ = conn
-                .start_transaction(false, None, None)
-                .and_then(|mut t| {
-                    t.prep_exec("INSERT INTO SC_RESULT_DETAIL
-                                        (CUSTOMER_ID, CUSTOMER_NAME, ADDRESS, MOBILE_PHONE, HOME_PHONE, EXTRA_PHONE, WHATSAPP, GENDER, EMAIL, FOTO, CREATED_DATE)
-                                    VALUES
-                                        (:customer_id, :customer_name, :address, :mobile_phone, :home_phone, :extra_phone, :whatsapp, :gender, :email, :foto, NOW())",
-                                    params!{
-                                        "customer_id" => &req.customer_id.clone(),
-                                        "customer_name" => &req.customer_name.clone(),
-                                        "address" => &req.address.clone(),
-                                        "mobile_phone" => &req.mobile_phone.clone(),
-                                        "home_phone" => &req.home_phone.clone(),
-                                        "extra_phone" => &req.extra_phone.clone(),
-                                        "whatsapp" => &req.whatsapp.clone(),
-                                        "gender" => &req.gender.clone(),
-                                        "email" => &req.email.clone(),
-                                        "foto" => &req.foto.clone(),
-                                    })
-                        .unwrap();
-                    t.commit().is_ok();
-                    Ok(())
-                })
-            .unwrap();
-        } else {
-            let _ = conn
-                .start_transaction(false, None, None)
-                .and_then(|mut t| {
-                    t.prep_exec(
-                        "UPDATE SC_RESULT_DETAIL SET
-                                            CUSTOMER_NAME = :customer_name,
-                                        ADDRESS = :address,
-                                        MOBILE_PHONE = :mobile_phone,
-                                        HOME_PHONE = :home_phone,
-                                        EXTRA_PHONE = :extra_phone,
-                                        WHATSAPP = :whatsapp,
-                                        GENDER = :gender,  
-                                        EMAIL = :email,
-                                        FOTO = :foto,
-                                        CREATED_DATE = NOW()
-                                        WHERE CUSTOMER_ID =:customer_id",
-                        params! {
-                            "customer_name" => &req.customer_name.clone(),
-                            "address" => &req.address.clone(),
-                            "mobile_phone" => &req.mobile_phone.clone(),
-                            "home_phone" => &req.home_phone.clone(),
-                            "extra_phone" => &req.extra_phone.clone(),
-                            "whatsapp" => &req.whatsapp.clone(),
-                            "gender" => &req.gender.clone(),
-                            "email" => &req.email.clone(),
-                            "foto" => &req.foto.clone(),
-                            "customer_id" => &req.customer_id.clone(),
-                        },
-                    )
-                    .unwrap();
-                    t.commit().is_ok();
-                    Ok(())
-                })
-                .unwrap();
-        }
-    }
-    Ok(())
-}
-*/
-
 pub fn TrxDetail(conn: &mut Conn, req: &ScDetail) -> Result<(), Error> {
-    let _ = conn
-        .start_transaction(false, None, None)
-        .and_then(|mut t| {
-            t.prep_exec("REPLACE INTO SC_RESULT_DETAIL
-                                (CUSTOMER_ID, CUSTOMER_NAME, ADDRESS, MOBILE_PHONE, HOME_PHONE, EXTRA_PHONE, WHATSAPP, GENDER, EMAIL, FOTO, CREATED_DATE)
-                            VALUES
-                                (:customer_id, :customer_name, :address, :mobile_phone, :home_phone, :extra_phone, :whatsapp, :gender, :email, :foto, NOW())",
-                            params!{
-                                "customer_id" => &req.customer_id.clone(),
-                                "customer_name" => &req.customer_name.clone(),
-                                "address" => &req.address.clone(),
-                                "mobile_phone" => &req.mobile_phone.clone(),
-                                "home_phone" => &req.home_phone.clone(),
-                                "extra_phone" => &req.extra_phone.clone(),
-                                "whatsapp" => &req.whatsapp.clone(),
-                                "gender" => &req.gender.clone(),
-                                "email" => &req.email.clone(),
-                                "foto" => &req.foto.clone(),
-                            })?;
-            t.commit().is_ok();
+    let edit = conn
+        .prep_exec(
+            "SELECT CUSTOMER_ID FROM SC_RESULT_DETAIL WHERE CUSTOMER_ID=:customer_id",
+            params! {"customer_id" => &req.customer_id.clone()},
+        )
+        .map(|result| {
+            result
+                .map(|x| x.unwrap())
+                .map(|_| true)
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| false)
+        });
+    
+    match edit {
+        Ok(true) => {
+            let _ = conn
+            .start_transaction(false, None, None)
+            .and_then(|mut t| {
+                t.prep_exec(
+                    "UPDATE SC_RESULT_DETAIL SET CUSTOMER_NAME = :customer_name, ADDRESS = :address, MOBILE_PHONE = :mobile_phone, HOME_PHONE = :home_phone,           
+                    EXTRA_PHONE = :extra_phone, WHATSAPP = :whatsapp, GENDER = :gender, EMAIL = :email, FOTO = :foto, CREATED_DATE = NOW()
+                    WHERE CUSTOMER_ID=:customer_id",
+                    params! {
+                        "customer_name" => &req.customer_name.clone(),
+                        "address" => &req.address.clone(),
+                        "mobile_phone" => &req.mobile_phone.clone(),
+                        "home_phone" => &req.home_phone.clone(),
+                        "extra_phone" => &req.extra_phone.clone(),
+                        "whatsapp" => &req.whatsapp.clone(),
+                        "gender" => &req.gender.clone(),
+                        "email" => &req.email.clone(),
+                        "foto" => &req.foto.clone(),
+                        "customer_id" => &req.customer_id.clone(),
+                    },
+                )?;
+                t.commit().is_ok();
+                Ok(())
+            })?;
             Ok(())
-        })?;
-    Ok(())
+        },
+        Ok(false) => {
+            let _ = conn
+            .start_transaction(false, None, None)
+            .and_then(|mut t| {
+                t.prep_exec("REPLACE INTO SC_RESULT_DETAIL
+                    (CUSTOMER_ID, CUSTOMER_NAME, ADDRESS, MOBILE_PHONE, HOME_PHONE, EXTRA_PHONE, WHATSAPP, GENDER, EMAIL, FOTO, CREATED_DATE)
+                    VALUES
+                    (:customer_id, :customer_name, :address, :mobile_phone, :home_phone, :extra_phone, :whatsapp, :gender, :email, :foto, NOW())",
+                params!{
+                    "customer_id" => &req.customer_id.clone(),
+                    "customer_name" => &req.customer_name.clone(),
+                    "address" => &req.address.clone(),
+                    "mobile_phone" => &req.mobile_phone.clone(),
+                    "home_phone" => &req.home_phone.clone(),
+                    "extra_phone" => &req.extra_phone.clone(),
+                    "whatsapp" => &req.whatsapp.clone(),
+                    "gender" => &req.gender.clone(),
+                    "email" => &req.email.clone(),
+                    "foto" => &req.foto.clone(),
+                    },
+                )?;
+                t.commit().is_ok();
+                Ok(())
+            })?;
+            Ok(())
+        },
+        Err(e) => Err(e),
+    }
 }
 
 pub fn getDetail(conn: &mut Conn, customer_id: &i64) -> Result<Vec<ScDetail>, Error> {
@@ -625,32 +595,32 @@ pub fn TrxCalculate(conn: &mut Conn, req: &ScCalculate, &sc_id: &i32, callback_i
         .start_transaction(false, None, None)
         .and_then(|mut t| {
             t.prep_exec("INSERT INTO SC_CALCULATE
-                                (CALLBACK_ID, SC_ID, COST_BASIC, COST_ADDON, COST_INET_ADDON, COST_INET_ROUTER,
-                                 COST_HD_CHARGE, BP_CHARGE, DEC_HD_CHARGE, ESTIMATED_iNSTALLATION,
-                                 ESTIMATED_PACKAGE, ESTIMATED_ADDON, ESTIMATED_PROMO, TOTAL_ESTIMATED_COST, REQUEST, RESPONSE)
-                            VALUES
-                                (:callback_id, :sc_id, :cost_basic, :cost_addon, :cost_inet_addon, :cost_inet_router,
-                                 :cost_hd_charge, :bp_charge, :dec_hd_charge, :estimated_installation,
-                                 :estimated_package, :estimated_addon, :estimated_promo, :total_estimated_cost, :request, :resp)",
-                            params!{
-                                "callback_id" => &callback_id,
-                                "sc_id" => &sc_id,
-                                "cost_basic" => &req.COST_PACKAGE.clone(),
-                                "cost_addon" => &req.COST_ALACARTE.clone(),
-                                "cost_inet_addon" => &req.COST_INTERNET_ADDON.clone(),
-                                "cost_inet_router" => &req.COST_INTERNET_ROUTER.clone(),
-                                "cost_hd_charge" => &req.COST_HD_CHARGE.clone(),
-                                "bp_charge" => &req.BELI_PUTUS_CHARGE.clone(),
-                                "dec_hd_charge" => &req.DECODER_HD_CHARGE.clone(),
-                                "estimated_installation" => &req.ESTIMATED_INSTALLATION.clone(),
-                                "estimated_package" => &req.ESTIMATED_COST_PACKAGE.clone(),
-                                "estimated_addon" => &req.ESTIMATED_ALACARTE.clone(),
-                                "estimated_promo" => &req.ESTIMATED_PROMO.clone(),
-                                "total_estimated_cost" => &req.TOTAL_ESTIMATED_COSTS.clone(),
-                                "request" => &request,
-                                "resp" => &resp,
-                               
-                            })?;
+                    (CALLBACK_ID, SC_ID, COST_BASIC, COST_ADDON, COST_INET_ADDON, COST_INET_ROUTER,
+                        COST_HD_CHARGE, BP_CHARGE, DEC_HD_CHARGE, ESTIMATED_iNSTALLATION,
+                        ESTIMATED_PACKAGE, ESTIMATED_ADDON, ESTIMATED_PROMO, TOTAL_ESTIMATED_COST, REQUEST, RESPONSE)
+                VALUES
+                    (:callback_id, :sc_id, :cost_basic, :cost_addon, :cost_inet_addon, :cost_inet_router,
+                        :cost_hd_charge, :bp_charge, :dec_hd_charge, :estimated_installation,
+                        :estimated_package, :estimated_addon, :estimated_promo, :total_estimated_cost, :request, :resp)",
+                params!{
+                    "callback_id" => &callback_id,
+                    "sc_id" => &sc_id,
+                    "cost_basic" => &req.COST_PACKAGE.clone(),
+                    "cost_addon" => &req.COST_ALACARTE.clone(),
+                    "cost_inet_addon" => &req.COST_INTERNET_ADDON.clone(),
+                    "cost_inet_router" => &req.COST_INTERNET_ROUTER.clone(),
+                    "cost_hd_charge" => &req.COST_HD_CHARGE.clone(),
+                    "bp_charge" => &req.BELI_PUTUS_CHARGE.clone(),
+                    "dec_hd_charge" => &req.DECODER_HD_CHARGE.clone(),
+                    "estimated_installation" => &req.ESTIMATED_INSTALLATION.clone(),
+                    "estimated_package" => &req.ESTIMATED_COST_PACKAGE.clone(),
+                    "estimated_addon" => &req.ESTIMATED_ALACARTE.clone(),
+                    "estimated_promo" => &req.ESTIMATED_PROMO.clone(),
+                    "total_estimated_cost" => &req.TOTAL_ESTIMATED_COSTS.clone(),
+                    "request" => &request,
+                    "resp" => &resp,
+                    
+                })?;
             t.commit().is_ok();
             Ok(())
         })?;
@@ -715,16 +685,16 @@ pub fn TrxFile(conn: &mut Conn, req: &FileUpload) -> Result<(), Error> {
         .start_transaction(false, None, None)
         .and_then(|mut t| {
             t.prep_exec("REPLACE INTO SC_RESULT_FILE
-                                (WO_ID, FILE_TYPE, FILE_SIZE, FILE_NAME, FILE_PATH)
-                            VALUES
-                                (:wo_id, :file_type, :file_size, :file_name, :file_path)",
-                            params!{
-                                "wo_id" => &req.wo_id.clone(),
-                                "file_type" => &req.file_type.clone(),
-                                "file_size" => &req.file_size.clone(),
-                                "file_name" => &req.file_name.clone(),
-                                "file_path" => &req.file_path.clone(),
-                            })
+                        (WO_ID, FILE_TYPE, FILE_SIZE, FILE_NAME, FILE_PATH)
+                        VALUES
+                        (:wo_id, :file_type, :file_size, :file_name, :file_path)",
+                    params!{
+                        "wo_id" => &req.wo_id.clone(),
+                        "file_type" => &req.file_type.clone(),
+                        "file_size" => &req.file_size.clone(),
+                        "file_name" => &req.file_name.clone(),
+                        "file_path" => &req.file_path.clone(),
+                    })
                 .unwrap();
             t.commit().is_ok();
             Ok(())
@@ -759,9 +729,9 @@ pub fn TrxUpdTrex(sfa: &mut ConnSFA, customer_id: &i32, resp: &ScCalculate) -> R
                 "UPDATE t_products SET commercial_product_id = :product_id, product_name = :product_name
                 WHERE customer_id = :customer_id and segment =1 and product_type='TV Base Package'",
                 params! {
-                        "product_id" => &resp.DETAIL_BASIC_PACKAGE[0]["basic_id"],
-                        "product_name" => &resp.DETAIL_BASIC_PACKAGE[0]["basic_name"],
-                        "customer_id" => &customer_id,
+                    "product_id" => &resp.DETAIL_BASIC_PACKAGE[0]["basic_id"],
+                    "product_name" => &resp.DETAIL_BASIC_PACKAGE[0]["basic_name"],
+                    "customer_id" => &customer_id,
                 },
             )?;
             t.commit().is_ok();
