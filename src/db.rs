@@ -590,6 +590,40 @@ pub fn getCalculate(conn: &mut Conn, sc_id: &i32, cb_id: &i32) -> Result<Option<
     }
 }
 
+pub fn getCalculate_Simulation(conn: &mut Conn, sc_id: &i32, cb_id: &i32) -> Result<Option<ScPackages>, Error> {
+    let packages = conn
+        .prep_exec(
+            "SELECT CUSTOMER_ID, BRAND, PROMO_ID, PROSPECT_TYPE, HW_STATUS, CUSTOMER_CLASS, HOUSE_STATUS, 
+        FIRST_PAYMENT, INET_ROUTER, INET_ADDON, PRODUCT FROM SC_V_CALC_SIMULATION WHERE SC_ID = :sc_id AND CALLBACK_ID =:cb_id",
+            params! {"sc_id" => &sc_id, "cb_id" => &cb_id},
+        )
+        .map(|r| {
+            r.map(|x| x.unwrap())
+                .map(|mut row| {  
+                    ScPackages {
+                        customer_id: row.take("CUSTOMER_ID").unwrap(),
+                        brand_id: row.take("BRAND").unwrap(),
+                        promotion_id: row.take("PROMO_ID").unwrap(),
+                        prospect_type: row.take("PROSPECT_TYPE").unwrap(),
+                        hardware_status: row.take("HW_STATUS").unwrap(),
+                        customer_class: row.take("CUSTOMER_CLASS").unwrap(),
+                        house_status: row.take("HOUSE_STATUS").unwrap(),
+                        first_payment: row.take("FIRST_PAYMENT").unwrap(),
+                        internet_package_router: row.take("INET_ROUTER").unwrap(),
+                        internet_package_addon: row.take("INET_ADDON").unwrap(),
+                        package: row.take("PRODUCT").unwrap(),
+                    }
+            
+                })
+                .into_iter()
+                .next()
+        })?;
+    match packages {
+        Some(calculate) => Ok(Some(calculate)),
+        _ => return Ok(None),
+    }
+}
+
 pub fn TrxCalculate(conn: &mut Conn, req: &ScCalculate, &sc_id: &i32, callback_id: &i32, request: &str, resp: &str) -> Result<(), Error> {
     let _ = conn
         .start_transaction(false, None, None)

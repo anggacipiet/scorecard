@@ -416,6 +416,38 @@ pub fn sc_reason(
     })
 }
 
+pub fn sc_calculate(
+    req: web::Json<model::Request>,
+    db: web::Data<db::Pool>,
+) -> impl Future<Item = HttpResponse, Error = AppError> {
+    web::block(move || {
+        let mut conn = db.get().unwrap();
+        let data = req.data.get();
+        let result = serde_json::from_str::<model::ScSimulation>(&data).unwrap();
+        println!("data: {:?} request: {:?}", data, result);
+        match db::TrxLogs(&mut conn, &req.into_inner()) {
+            Ok(_) => {
+                match ScClient::Calc_Simulation(&mut ScClient::default(), &mut conn, &result.sc_id, &result.id, &result.product_id) {
+                    Ok(ok) => Ok(ok),
+                    Err(e) => Err(e),
+                }      
+            },
+            Err(e) =>  Err(e.into()),
+        }  
+    })
+    .then(|res| match res {
+        Ok(calc) => Ok(HttpResponse::Ok().json(json!({
+            "message": "calculate simulation success",
+            "status": true,
+            "data": calc,
+        }))),
+        Err(e) => Ok(HttpResponse::InternalServerError().json(json!({
+            "message": "calculate simulation failed".to_string(),
+            "status":false,
+            "data": e.to_string()}))),
+    })
+}
+
 pub fn sc_login(
     req: web::Json<model::Request>, 
     //id: Identity, 
@@ -716,6 +748,10 @@ fn main() -> std::io::Result<()> {
                     .service(
                         web::resource("/sc-result/{id}")
                             .route(web::post().to_async(sc_result)),
+                    )
+                    .service(
+                        web::resource("/sc-calculate")
+                            .route(web::post().to_async(sc_calculate)),
                     )
                     .service(
                         web::resource("/sc-reason")
