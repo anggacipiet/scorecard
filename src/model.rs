@@ -342,3 +342,10 @@ pub struct ScReason {
     pub reason_id: i32,
     pub descr: String,
 }
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ScSimulation {
+    pub id: i32,
+    pub sc_id: i32,
+    pub product_id: i32,
+}

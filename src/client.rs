@@ -10,7 +10,7 @@ use reqwest::{
 use serde::de::Deserialize;
 use serde_json::{json, map::Map, Value};
 
-use crate::db::{getCalculate, get_profile, push_ppg, Conn, ConnSFA, TrxCalculate, TrxUpdTrex};
+use crate::db::{getCalculate, getCalculate_Simulation, get_profile, push_ppg, Conn, ConnSFA, TrxCalculate, TrxUpdTrex};
 use crate::errors::AppError;
 use crate::failures::CustomError;
 use std::borrow::Cow;
@@ -62,45 +62,74 @@ impl From<&reqwest::Response> for ApiError {
 
 impl ScClient {
 
-    pub fn send_result(&mut self) -> Result<Response, failure::Error> {
-        let req = r#"
-        {
-            "application": {
-            "device_name": "Redmi Note 4G",
-            "os": "Kitkat 4.4",
-            "imei": "1234567890",
-            "ip_address": "192.168.168.221",
-            "application_name": "SCORECARD for UAT",
-            "application_id": "id.mncvision.scorecard",
-            "version_name": "1.0.0",
-            "version_code": "1",
-            "database_name": "1",
-            "database_version": "mncvision_scorecard.db"
-            },
-            "process": {
-            "user_login": "myusufsfa",
-            "nik": "9595190207",
-            "employee_id": "12345",
-            "employee_name": "M MAULANA YUSUF",
-            "latlng": "1234, -1234",
-            "time_latlng": "2019-05-14 21:07:41",
-            "process_name": "sc list wo"
-            },
-            "data": {"customer_id":500280534,"tb_id":1,"tdb_id":2,"td_id":1,"ec_id":2,"employee_id":50585,"latitude":"0.0","longitude":"0.0"}
-        }"#;
-        let v: Value = serde_json::from_str(req)?;
-        println!("request: {:?}", v);
-        let o = self.post("/v1.0.0/sc-result/2", &v);
-        println!("response: {:?}", o);
-        match o {
-            Ok(ok) => {
-                let resp = serde_json::from_str::<Response>(&ok)?;
-                println!("bind: {:?}", resp);
-                Ok(resp)
+    pub fn Calc_Simulation(
+        &mut self,
+        conn: &mut Conn,
+        sc_id: &i32,
+        cb_id: &i32,
+        prod_id: &i32,
+    ) -> Result<Vec<ScCalculate>, Error> {
+        if let Some(prod_id) = Some(338) {
+            match getCalculate_Simulation(conn, &sc_id, &cb_id) {
+                Ok(Some(oke)) => {
+                    let req = json!({
+                        "brand_id": oke.brand_id,
+                        "promotion_id": oke.promotion_id,
+                        "prospect_type": oke.prospect_type,
+                        "hardware_status": oke.hardware_status,
+                        "customer_class": oke.customer_class,
+                        "house_status": oke.house_status,
+                        "first_payment": oke.first_payment,
+                        "internet_package_router": oke.internet_package_router,
+                        "internet_package_addon": oke.internet_package_addon,
+                        "package": oke.package
+                    });
+                    let v: Value = serde_json::from_value(req).unwrap();
+                    println!("request: {:?}", v);
+                    let o = self.post("/api/Calculation/calculateEstimation", &v);
+                    println!("response: {:?}", o);
+                    match o {
+                        Ok(ok) => {
+                            let resp = serde_json::from_str::<ScCalculate>(&ok).unwrap();
+                            Ok(vec![resp])
+                        }
+                        Err(e) => Err(Error::from(CustomError::new(format!("{}", e).as_str()))),
+                    }
+                }
+                Ok(None) => Ok(vec![ScCalculate::default()]), 
+                Err(e) => Err(Error::from(CustomError::new(format!("{}", e).as_str()))),
             }
-            Err(e) => Err(e),
+        }else{
+            match getCalculate(conn, &sc_id, &cb_id) {
+                Ok(Some(oke)) => {
+                    let req = json!({
+                        "brand_id": oke.brand_id,
+                        "promotion_id": oke.promotion_id,
+                        "prospect_type": oke.prospect_type,
+                        "hardware_status": oke.hardware_status,
+                        "customer_class": oke.customer_class,
+                        "house_status": oke.house_status,
+                        "first_payment": oke.first_payment,
+                        "internet_package_router": oke.internet_package_router,
+                        "internet_package_addon": oke.internet_package_addon,
+                        "package": oke.package
+                    });
+                    let v: Value = serde_json::from_value(req).unwrap();
+                    println!("request: {:?}", v);
+                    let o = self.post("/api/Calculation/calculateEstimation", &v);
+                    println!("response: {:?}", o);
+                    match o {
+                        Ok(ok) => {
+                            let resp = serde_json::from_str::<ScCalculate>(&ok).unwrap();
+                            Ok(vec![resp])
+                        }
+                        Err(e) => Err(Error::from(CustomError::new(format!("{}", e).as_str()))),
+                    }
+                }
+                Ok(None) => Ok(vec![ScCalculate::default()]), 
+                Err(e) => Err(Error::from(CustomError::new(format!("{}", e).as_str()))),
+            }
         }
-
     }
 
     pub fn Calculate(
@@ -182,6 +211,7 @@ impl ScClient {
             Err(e) => Err(Error::from(CustomError::new(format!("{}", e).as_str()))),
         }
     }
+
 }
 
 impl ScClient {
