@@ -100,7 +100,7 @@ impl ScClient {
                 Err(e) => Err(Error::from(CustomError::new(format!("{}", e).as_str()))),
             }
         }else{
-            match getCalculate(conn, &sc_id, &cb_id) {
+            match getCalculate_Simulation(conn, &sc_id, &cb_id) {
                 Ok(Some(oke)) => {
                     let req = json!({
                         "brand_id": oke.brand_id,
