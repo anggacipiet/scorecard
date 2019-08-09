@@ -35,7 +35,6 @@ pub struct ScClient {
 #[derive(Debug)]
 pub enum ApiError {
     Unauthorized,
-    RateLimited(Option<usize>),
     Other(u16),
 }
 impl failure::Fail for ApiError {}
@@ -48,13 +47,6 @@ impl From<&reqwest::Response> for ApiError {
     fn from(response: &reqwest::Response) -> Self {
         match response.status() {
             StatusCode::UNAUTHORIZED => ApiError::Unauthorized,
-            StatusCode::TOO_MANY_REQUESTS => {
-                if let Ok(duration) = response.headers()[reqwest::header::RETRY_AFTER].to_str() {
-                    ApiError::RateLimited(duration.parse::<usize>().ok())
-                } else {
-                    ApiError::RateLimited(None)
-                }
-            }
             status => ApiError::Other(status.as_u16()),
         }
     }

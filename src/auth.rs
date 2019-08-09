@@ -104,7 +104,7 @@ where
                         }
                     }
                 }
-            } else if req.path() == "/api/v1.0.0/sc-login" {
+            } else if req.path() == "/sc-dev/v1.0.0/sc-login" {
                 return Either::A(self.service.call(req));
             } else {
                 error!("{}", "Error process authentication");
