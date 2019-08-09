@@ -724,7 +724,7 @@ fn main() -> std::io::Result<()> {
             .wrap(auth::CheckAuth)
             .wrap(middleware::Logger::default())
             .service(
-                web::scope("/api/v1.0.0")
+                web::scope("/sc-dev/v1.0.0")
                     .service(web::resource("").to(|| "New-ScoreCard Version 1.0.0."))
                     .service(web::resource("/sc-tb").route(web::post().to_async(sc_tb)))
                     .service(web::resource("/sc-tdb/{id}").route(web::post().to_async(sc_tdb)))
