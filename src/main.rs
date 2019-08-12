@@ -678,8 +678,8 @@ fn main() -> std::io::Result<()> {
     //let sys = actix_rt::System::new("scorecard");
     //let cpus = num_cpus::get();
     //let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let database_url = dotenv!("DATABASE_URL");
-    let db_sfa = dotenv!("DATABASE_SFA");
+    let database_url = dotenv!("DATABASE_URL_PROD");
+    let db_sfa = dotenv!("DATABASE_SFA_PROD");
     //println!("db_sfa: {:?}", db_sfa);
     let pool = db::init_pool(&database_url);
     let sfa = db::init_sfa(&db_sfa);
@@ -724,7 +724,7 @@ fn main() -> std::io::Result<()> {
             .wrap(auth::CheckAuth)
             .wrap(middleware::Logger::default())
             .service(
-                web::scope("/sc-dev/v1.0.0")
+                web::scope("/sc-prod/v1.0.0")
                     .service(web::resource("").to(|| "New-ScoreCard Version 1.0.0."))
                     .service(web::resource("/sc-tb").route(web::post().to_async(sc_tb)))
                     .service(web::resource("/sc-tdb/{id}").route(web::post().to_async(sc_tdb)))
