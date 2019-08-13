@@ -1,0 +1,29 @@
+server:
+  name: scorecard-prod
+  address: 127.0.0.1
+  port: 9090
+
+database:
+  valsys: mysql://root:Password@123@192.168.177.220:3306/scorecard
+  sfa:    mysql://root:password123@192.168.177.161:3306/SFA
+
+storage:
+  upload: /filesfa/images/valsys/scorecard
+  url: http://192.168.177.187
+  log: log4rs.yaml
+
+api:
+  path: sc-prod
+  version: v1.0.0
+
+token:
+  secret: 5C0RC4RD!
+  expired: 60 * 60 * 24 * 7
+
+client:
+  base_url: http://192.168.177.210/valsys
+  path: /api/Calculation/calculateEstimation
+
+icc:
+  base_url: http://192.168.177.185:1111/api/iccapi/ap1msky!/customer/doSendContacts
+
