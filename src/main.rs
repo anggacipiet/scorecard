@@ -18,6 +18,10 @@ extern crate jsonwebtoken as jwt;
 extern crate csrf_token;
 extern crate log;
 extern crate lazy_static;
+extern crate clap;
+extern crate config;
+extern crate fern;
+extern crate log4rs;
 #[macro_use]
 extern crate dotenv_codegen;
 
@@ -49,8 +53,9 @@ use r2d2_mysql::{mysql::from_row, mysql::params, mysql::from_value};
 use serde_json::{value::RawValue, value::Value, json, to_string, Map};
 use log::{info, trace, warn, debug};
 use std::io::Write;
-use std::{env, fs::File, fs::create_dir_all, iter, path::PathBuf};
+use std::{env, process, fs::File, fs::create_dir_all, iter, path::PathBuf};
 use std::str::FromStr;
+
 mod db;
 mod model;
 mod auth;
@@ -58,10 +63,14 @@ mod token;
 mod errors;
 mod client;
 mod failures;
+mod cfg;
+mod helper;
 
 use crate::errors::AppError;
 use crate::token::{create_token, verify_token, decode_token};
 use crate::client::ScClient;
+use crate::cfg::app_config;
+use crate::helper::{init_log};
 
 fn sc_tb(req: web::Json<model::Request>, db: web::Data<db::Pool>) 
 -> impl Future<Item = HttpResponse, Error = AppError> {
@@ -667,6 +676,7 @@ pub fn sc_upload(id: web::Path<String>, multipart: Multipart, db: web::Data<db::
 
 pub struct AppState {
     pub sfa: db::SFA,
+    //pub cfg: cfg::AppConfig,
 }
 
 fn main() -> std::io::Result<()> {
@@ -675,15 +685,25 @@ fn main() -> std::io::Result<()> {
     env::set_var("RUST_LOG", "actix_server=info,actix_web=debug");
     env::set_var("RUST_BACKTRACE", "1");
     env_logger::init();
-    //let sys = actix_rt::System::new("scorecard");
+   
+    let app_cfg = match app_config() {
+        Ok(app_cfg) => app_cfg,
+        Err(e) => {
+            info!("Could not load app configuration: {:?}", e);
+            process::exit(0);
+        }
+    };
+
+    let pool = db::init_pool(&app_cfg.db.valsys);
+    let sfa = db::init_sfa(&app_cfg.db.sfa);
+    let sys = actix_rt::System::new(&*app_cfg.server.name);
+    //init_log(1).expect("failed to initialize logging.");
+    log4rs::init_file(&app_cfg.storage.log, Default::default()).unwrap();
     //let cpus = num_cpus::get();
     //let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let database_url = dotenv!("DATABASE_URL");
-    let db_sfa = dotenv!("DATABASE_SFA");
-    //println!("db_sfa: {:?}", db_sfa);
-    let pool = db::init_pool(&database_url);
-    let sfa = db::init_sfa(&db_sfa);
-    //println!("sfa: {:?}", sfa);
+    //let database_url = dotenv!("DATABASE_URL");
+    //let db_sfa = dotenv!("DATABASE_SFA");
+   
     //let csrf_token_header = header::HeaderName::from_lowercase(b"x-csrf-token").unwrap();
 
     // let addr: Addr<DbExecutor> = SyncArbiter::start(4, move|| db::DbExecutor(pool.clone()));
@@ -693,7 +713,7 @@ fn main() -> std::io::Result<()> {
             .data(pool.clone())
             //.data(sfa.clone())
             .data(AppState {
-                sfa: sfa.clone(),
+                sfa: sfa.clone()
             })
             /*.data(
                 CsrfTokenGenerator::new(
@@ -724,7 +744,7 @@ fn main() -> std::io::Result<()> {
             .wrap(auth::CheckAuth)
             .wrap(middleware::Logger::default())
             .service(
-                web::scope("/sc-dev/v1.0.0")
+                web::scope("/sc-prod/v1.0.0")
                     .service(web::resource("").to(|| "New-ScoreCard Version 1.0.0."))
                     .service(web::resource("/sc-tb").route(web::post().to_async(sc_tb)))
                     .service(web::resource("/sc-tdb/{id}").route(web::post().to_async(sc_tdb)))
@@ -773,9 +793,18 @@ fn main() -> std::io::Result<()> {
             )
             .default_service(web::route().to(|| HttpResponse::NotFound()))
     })
+<<<<<<< HEAD
     .bind("0.0.0.0:8080")?
     .run()
     //.start();
+=======
+    //.bind("127.0.0.1:8080")?
+    //.run()
+    .bind(&format!("{}:{}", &app_cfg.server.address, &app_cfg.server.port))
+    .expect(&format!("can't bind to port {}", &app_cfg.server.port))
+    .start();
+    info!("{}", format!("server is listening on port {} !", &app_cfg.server.port));
+>>>>>>> be6136b1d4daaa9abd8e2a10b7328c7498c7d5de
 
-    //sys.run()
+    sys.run()
 }

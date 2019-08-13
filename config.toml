@@ -1,0 +1,28 @@
+[server]
+name = "scorecard-dev"
+address = "0.0.0.0"
+port = 8080
+
+[database]
+valsys = "mysql://root:Password@123@192.168.177.203:3306/scorecard"
+sfa  = "mysql://root:password123@192.168.177.161:3306/sfa_test"
+
+[storage]
+upload = "/filesfa/images/valsys/scorecard"
+url = "http://192.168.177.187"
+log = "log4rs.yaml"
+
+[api]
+path = "sc-dev"
+version = "v1.0.0"
+
+[token]
+secret = "5C0RC4RD!"
+expired = "60 * 60 * 24 * 7"
+
+[client]
+base_url = "http://192.168.177.203/valsys"
+path = "/api/Calculation/calculateEstimation"
+
+[icc]
+base_url = "http://192.168.177.186:1111/api/iccapi/ap1msky!/customer/doSendContacts"
