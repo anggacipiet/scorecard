@@ -1,4 +1,4 @@
 upload/
 target/
-src/errors.rs
-src/authorization.rs
+sc-dev/
+sc-prod/

@@ -744,7 +744,7 @@ fn main() -> std::io::Result<()> {
             .wrap(auth::CheckAuth)
             .wrap(middleware::Logger::default())
             .service(
-                web::scope("/sc-prod/v1.0.0")
+                web::scope("/sc-dev/v1.0.0")
                     .service(web::resource("").to(|| "New-ScoreCard Version 1.0.0."))
                     .service(web::resource("/sc-tb").route(web::post().to_async(sc_tb)))
                     .service(web::resource("/sc-tdb/{id}").route(web::post().to_async(sc_tdb)))
@@ -793,18 +793,12 @@ fn main() -> std::io::Result<()> {
             )
             .default_service(web::route().to(|| HttpResponse::NotFound()))
     })
-<<<<<<< HEAD
-    .bind("0.0.0.0:8080")?
-    .run()
-    //.start();
-=======
-    //.bind("127.0.0.1:8080")?
+    //.bind("0.0.0.0:8080")?
     //.run()
+    //.start();
     .bind(&format!("{}:{}", &app_cfg.server.address, &app_cfg.server.port))
     .expect(&format!("can't bind to port {}", &app_cfg.server.port))
     .start();
     info!("{}", format!("server is listening on port {} !", &app_cfg.server.port));
->>>>>>> be6136b1d4daaa9abd8e2a10b7328c7498c7d5de
-
     sys.run()
 }

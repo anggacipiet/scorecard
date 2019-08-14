@@ -70,7 +70,7 @@ fn init_config(path: &str) -> Result<Config, Error> {
             .map_err(|e| Error::from(CustomError::new(&format!("Could not read from file {}: {}", path, e))))?;
         content
     };
-    config.merge(CfgFile::from_str(content.as_ref(), FileFormat::Yaml))?;
+    config.merge(CfgFile::from_str(content.as_ref(), FileFormat::Toml))?;
 
     Ok(config)
 }

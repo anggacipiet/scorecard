@@ -73,7 +73,7 @@ pub fn TrxLogs(conn: &mut Conn, req: &Request) -> Result<(), Error> {
                     "data" =>  &req.data.get(),
                     "process" => &req.action_package.clone(),
                 })?;
-                t.commit().is_ok();
+                let _ = t.commit().is_ok();
             Ok(())
         })?;
     Ok(())
@@ -125,7 +125,7 @@ pub fn TrxToken(conn: &mut Conn, employee_id: &i32, token: &str) -> Result<(), E
                     "token" => &token,
                 },
             )?;
-            t.commit().is_ok();
+            let _ = t.commit().is_ok();
             Ok(())
         })?;
     Ok(())
@@ -141,7 +141,7 @@ pub fn TrxLogout(conn: &mut Conn, employee_id: &i32) -> Result<(), Error> {
                     "employee_id" => &employee_id,
                 },
             )?;
-            t.commit().is_ok();
+            let _ = t.commit().is_ok();
             Ok(())
         })?;
     Ok(())
@@ -362,7 +362,7 @@ pub fn TrxResult(conn: &mut Conn, req: &ScResult) -> Result<(), Error> {
                     "latitude" => &req.latitude.clone(),
                     "longitude" => &req.longitude.clone(),
                 })?;
-            t.commit().is_ok();
+            let _ = t.commit().is_ok();
             Ok(())
         })?;
     Ok(())
@@ -491,7 +491,7 @@ pub fn TrxDetail(conn: &mut Conn, req: &ScDetail) -> Result<(), Error> {
                         "customer_id" => &req.customer_id.clone(),
                     },
                 )?;
-                t.commit().is_ok();
+                let _ = t.commit().is_ok();
                 Ok(())
             })?;
             Ok(())
@@ -517,7 +517,7 @@ pub fn TrxDetail(conn: &mut Conn, req: &ScDetail) -> Result<(), Error> {
                     "foto" => &req.foto.clone(),
                     },
                 )?;
-                t.commit().is_ok();
+                let _ = t.commit().is_ok();
                 Ok(())
             })?;
             Ok(())
@@ -655,7 +655,7 @@ pub fn TrxCalculate(conn: &mut Conn, req: &ScCalculate, &sc_id: &i32, callback_i
                     "resp" => &resp,
                     
                 })?;
-            t.commit().is_ok();
+            let _ = t.commit().is_ok();
             Ok(())
         })?;
     Ok(())
@@ -688,7 +688,7 @@ pub fn push_ppg(conn: &mut Conn, customer_id: &i64, customer_name: &String, amou
                             "customer_id" => &customer_id,
                     },
                 )?;
-                t.commit().is_ok();
+                let _ = t.commit().is_ok();
                 Ok(())
             })?;
             Ok(())
@@ -706,7 +706,7 @@ pub fn push_ppg(conn: &mut Conn, customer_id: &i64, customer_name: &String, amou
                         "amount" => &amount,
                     },
                 )?;
-                t.commit().is_ok();
+                let _ = t.commit().is_ok();
                 Ok(())
             })?;
             Ok(())
@@ -730,7 +730,7 @@ pub fn TrxFile(conn: &mut Conn, req: &FileUpload) -> Result<(), Error> {
                         "file_path" => &req.file_path.clone(),
                     })
                 .unwrap();
-            t.commit().is_ok();
+            let _ = t.commit().is_ok();
             Ok(())
         })
     .unwrap();
@@ -749,7 +749,7 @@ pub fn TrxReason(conn: &mut Conn, req: &ScReason) -> Result<(), Error> {
                 "id" => &req.reason_id.clone(),
                 "descr" => &req.descr.clone(),
             })?;
-            t.commit().is_ok();
+            let _ = t.commit().is_ok();
             Ok(())
         })?;
     Ok(())
@@ -768,7 +768,7 @@ pub fn TrxUpdTrex(sfa: &mut ConnSFA, customer_id: &i32, resp: &ScCalculate) -> R
                     "customer_id" => &customer_id,
                 },
             )?;
-            t.commit().is_ok();
+            let _ = t.commit().is_ok();
             Ok(())
         })?;
     Ok(())

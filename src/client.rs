@@ -23,7 +23,7 @@ use std::string::{String, ToString};
 use std::time::Duration;
 
 
-pub static BASE_URL: &str = "http://192.168.177.210/valsys";
+pub static BASE_URL: &str = "http://192.168.177.203/valsys";
 //"http://192.168.177.221:8080/api"
 
 pub struct ScClient {
