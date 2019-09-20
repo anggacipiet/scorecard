@@ -22,8 +22,8 @@ pub fn init_pool(db_url: &str) -> Pool {
     let builder = OptsBuilder::from_opts(opts);
     let manager = MysqlConnectionManager::new(builder);
     r2d2::Pool::builder()
-        .max_size(15)
-        .min_idle(Some(0))
+        .max_size(10)
+        .min_idle(Some(5))
         .build(manager)
         .unwrap()
 }
@@ -33,8 +33,8 @@ pub fn init_sfa(url: &str) -> SFA {
     let builder_ = OptsBuilder::from_opts(opts_);
     let manager_ = MysqlConnectionManager::new(builder_);
     r2d2::Pool::builder()
-        .max_size(15)
-        .min_idle(Some(0))
+        .max_size(10)
+        .min_idle(Some(5))
         .build(manager_)
         .unwrap()
 }
@@ -344,28 +344,79 @@ pub fn get_profile(conn: &mut Conn, id: i32) -> Result<Vec<ScCustomer>, Error> {
 }
 
 pub fn TrxResult(conn: &mut Conn, req: &ScResult) -> Result<(), Error> {
-    let _ = conn
-        .start_transaction(false, None, None)
-        .and_then(|mut t| {
-            t.prep_exec("INSERT INTO SC_RESULT_NEW
-                    (WO_ID, CUSTOMER_ID, TB_ID, TDB_ID, TD_ID, EC_ID, EMPLOYEE_ID, LATITUDE, LONGITUDE, CREATED_DATE)
-                VALUES
-                    (:wo_id, :customer_id, :tb_id, :tdb_id, :td_id, :ec_id, :employee_id, :latitude, :longitude, NOW())",
-                params!{
-                    "wo_id" => &req.wo_id.clone(),
-                    "customer_id" => &req.customer_id.clone(),
-                    "tb_id" => &req.tb_id.clone(),
-                    "tdb_id" => &req.tdb_id.clone(),
-                    "td_id" => &req.td_id.clone(),
-                    "ec_id" => &req.ec_id.clone(),
-                    "employee_id" => &req.employee_id.clone(),
-                    "latitude" => &req.latitude.clone(),
-                    "longitude" => &req.longitude.clone(),
-                })?;
-            let _ = t.commit().is_ok();
+     let res = conn
+        .prep_exec(
+            "SELECT CUSTOMER_ID FROM SC_RESULT_NEW WHERE CUSTOMER_ID=:customer_id
+            AND WO_ID=:wo_id",
+            params! {
+                "customer_id" => &req.customer_id.clone(),
+                "wo_id" => &req.wo_id.clone(),
+            },
+        )
+        .map(|result| {
+            result
+                .map(|x| x.unwrap())
+                .map(|_| true)
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| false)
+        });
+
+    match res {
+        Ok(true) => {
+            let _ = conn
+            .start_transaction(false, None, None)
+            .and_then(|mut t| {
+                t.prep_exec(
+                    "UPDATE SC_RESULT_NEW SET 
+                    TB_ID = :tb_id, TDB_ID = :tdb_id,           
+                    TD_ID = :td_id, EC_ID = :ec_id, EMPLOYEE_ID = :employee_id, 
+                    LATITUDE = :latitude, LONGITUDE = :longitude, 
+                    CREATED_DATE = NOW()
+                    WHERE CUSTOMER_ID=:customer_id AND WO_ID= :wo_id",
+                    params! {
+                        "tb_id" => &req.tb_id.clone(),
+                        "tdb_id" => &req.tdb_id.clone(),
+                        "td_id" => &req.td_id.clone(),
+                        "ec_id" => &req.ec_id.clone(),
+                        "employee_id" => &req.employee_id.clone(),
+                        "latitude" => &req.latitude.clone(),
+                        "longitude" => &req.longitude.clone(),
+                        "customer_id" => &req.customer_id.clone(),
+                        "wo_id" => &req.wo_id.clone(),
+                    },
+                )?;
+                let _ = t.commit().is_ok();
+                Ok(())
+            })?;
             Ok(())
-        })?;
-    Ok(())
+        },
+        Ok(false) => {
+            let _ = conn
+                .start_transaction(false, None, None)
+                .and_then(|mut t| {
+                    t.prep_exec("INSERT INTO SC_RESULT_NEW
+                            (WO_ID, CUSTOMER_ID, TB_ID, TDB_ID, TD_ID, EC_ID, EMPLOYEE_ID, LATITUDE, LONGITUDE, CREATED_DATE)
+                        VALUES
+                            (:wo_id, :customer_id, :tb_id, :tdb_id, :td_id, :ec_id, :employee_id, :latitude, :longitude, NOW())",
+                        params!{
+                            "wo_id" => &req.wo_id.clone(),
+                            "customer_id" => &req.customer_id.clone(),
+                            "tb_id" => &req.tb_id.clone(),
+                            "tdb_id" => &req.tdb_id.clone(),
+                            "td_id" => &req.td_id.clone(),
+                            "ec_id" => &req.ec_id.clone(),
+                            "employee_id" => &req.employee_id.clone(),
+                            "latitude" => &req.latitude.clone(),
+                            "longitude" => &req.longitude.clone(),
+                        })?;
+                    let _ = t.commit().is_ok();
+                    Ok(())
+                })?;
+            Ok(())
+        },
+        Err(e) => Err(e),
+    }
 }
 
 pub fn getCallback(conn: &mut Conn, customer_id: &i64, tb_id: &i32, tdb_id: &i32, td_id: &i32, elc_id: &i32,) -> Result<Vec<ScCallback>, Error> {

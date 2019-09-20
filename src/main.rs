@@ -64,13 +64,13 @@ mod errors;
 mod client;
 mod failures;
 mod cfg;
-mod helper;
+//mod helper;
 
 use crate::errors::AppError;
 use crate::token::{create_token, verify_token, decode_token};
 use crate::client::ScClient;
 use crate::cfg::app_config;
-use crate::helper::{init_log};
+//use crate::helper::{init_log};
 
 fn sc_tb(req: web::Json<model::Request>, db: web::Data<db::Pool>) 
 -> impl Future<Item = HttpResponse, Error = AppError> {
@@ -696,9 +696,9 @@ fn main() -> std::io::Result<()> {
 
     let pool = db::init_pool(&app_cfg.db.valsys);
     let sfa = db::init_sfa(&app_cfg.db.sfa);
-    let sys = actix_rt::System::new(&*app_cfg.server.name);
+    //let sys = actix_rt::System::new(&*app_cfg.server.name);
     //init_log(1).expect("failed to initialize logging.");
-    log4rs::init_file(&app_cfg.storage.log, Default::default()).unwrap();
+    //log4rs::init_file(&app_cfg.storage.log, Default::default()).unwrap();
     //let cpus = num_cpus::get();
     //let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     //let database_url = dotenv!("DATABASE_URL");
@@ -744,7 +744,7 @@ fn main() -> std::io::Result<()> {
             .wrap(auth::CheckAuth)
             .wrap(middleware::Logger::default())
             .service(
-                web::scope("/sc-dev/v1.0.0")
+                web::scope("/sc-prod/v1.0.0")
                     .service(web::resource("").to(|| "New-ScoreCard Version 1.0.0."))
                     .service(web::resource("/sc-tb").route(web::post().to_async(sc_tb)))
                     .service(web::resource("/sc-tdb/{id}").route(web::post().to_async(sc_tdb)))
@@ -798,7 +798,8 @@ fn main() -> std::io::Result<()> {
     //.start();
     .bind(&format!("{}:{}", &app_cfg.server.address, &app_cfg.server.port))
     .expect(&format!("can't bind to port {}", &app_cfg.server.port))
-    .start();
-    info!("{}", format!("server is listening on port {} !", &app_cfg.server.port));
-    sys.run()
+    .run()
+    //.start();
+   // info!("{}", format!("server is listening on port {} !", &app_cfg.server.port));
+    //sys.run()
 }
